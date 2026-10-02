@@ -5,26 +5,11 @@ locals {
 }
 
 # ---------------------------------------------------------------------------
-# APIs
-# ---------------------------------------------------------------------------
-resource "google_project_service" "apis" {
-  for_each = toset([
-    "compute.googleapis.com",
-    "iap.googleapis.com",
-  ])
-
-  service            = each.value
-  disable_on_destroy = false
-}
-
-# ---------------------------------------------------------------------------
 # Réseau
 # ---------------------------------------------------------------------------
 resource "google_compute_network" "vpc" {
   name                    = "${var.name}-vpc"
   auto_create_subnetworks = false
-
-  depends_on = [google_project_service.apis]
 }
 
 resource "google_compute_subnetwork" "subnet" {
@@ -42,8 +27,6 @@ resource "google_compute_address" "ingress" {
   region       = var.region
   address_type = "EXTERNAL"
   network_tier = "PREMIUM"
-
-  depends_on = [google_project_service.apis]
 }
 
 # ---------------------------------------------------------------------------

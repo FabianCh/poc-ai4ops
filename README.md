@@ -58,7 +58,8 @@ certificat Let's Encrypt automatiquement.
 
 - `terraform` >= 1.5
 - `gcloud` authentifié : `gcloud auth login` **et** `gcloud auth application-default login`
-- un projet GCP avec la facturation activée
+- un projet GCP avec la facturation activée et les APIs Compute Engine et IAP activées :
+  `gcloud services enable compute.googleapis.com iap.googleapis.com --project <PROJECT_ID>`
 - optionnel : `kubectl` et `flux` pour inspecter le cluster
 
 ### 1. Configurer

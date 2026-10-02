@@ -7,7 +7,6 @@ Provisionne sur Google Cloud une VM Compute Engine exécutant un cluster
 
 | Ressource | Rôle |
 | --- | --- |
-| APIs `compute`, `iap` | Activées sur le projet (non désactivées au destroy) |
 | VPC `<name>-vpc` + sous-réseau | Réseau dédié (`10.10.0.0/24` par défaut) |
 | IP externe statique `<name>-ip` | Point d'entrée unique (apps + API Kubernetes) |
 | Firewall `allow-http-https` | 80/443 depuis `ingress_source_ranges` (Internet par défaut) |
