@@ -1,0 +1,10 @@
+# Backend GCS optionnel : copier ce fichier en backend.tf puis `terraform init -migrate-state`.
+# Le bucket doit exister au préalable :
+#   gcloud storage buckets create gs://<PROJECT_ID>-tfstate --location=europe-west1 --uniform-bucket-level-access
+#   gcloud storage buckets update gs://<PROJECT_ID>-tfstate --versioning
+terraform {
+  backend "gcs" {
+    bucket = "<PROJECT_ID>-tfstate"
+    prefix = "poc-ai4ops/gcp-k3s"
+  }
+}

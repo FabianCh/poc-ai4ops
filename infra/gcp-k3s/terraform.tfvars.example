@@ -1,0 +1,14 @@
+# Copier en terraform.tfvars (ignoré par git) et adapter.
+project_id = "mon-projet-gcp"
+
+# region       = "europe-west1"
+# zone         = "europe-west1-b"
+# name         = "ai4ops-k3s"
+# machine_type = "e2-standard-4"
+# spot         = false
+
+# Votre IP publique pour joindre l'API Kubernetes / SSH sans IAP :
+#   curl -s https://ifconfig.me
+# admin_source_ranges = ["203.0.113.10/32"]
+
+# acme_email = "vous@example.com"

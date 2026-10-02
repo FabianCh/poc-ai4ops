@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+# Bootstrap du nœud k3s — rendu par Terraform (templatefile) et exécuté par
+# google-startup-scripts à chaque démarrage de la VM : le script est idempotent.
+# Logs : /var/log/k3s-bootstrap.log
+set -euo pipefail
+exec > >(tee -a /var/log/k3s-bootstrap.log) 2>&1
+
+EXTERNAL_IP="${external_ip}"
+K3S_CHANNEL="${k3s_channel}"
+K3S_VERSION="${k3s_version}"
+CERT_MANAGER_VERSION="${cert_manager_version}"
+
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+MANIFESTS_DIR=/var/lib/rancher/k3s/server/manifests
+
+log() { echo "[$(date -Is)] $*"; }
+
+# Réessaie une commande jusqu'à ce qu'elle réussisse (max $1 secondes).
+retry() {
+  local timeout=$1; shift
+  local start=$SECONDS
+  until "$@" >/dev/null 2>&1; do
+    if (( SECONDS - start > timeout )); then
+      log "Timeout ($${timeout}s) : $*"
+      return 1
+    fi
+    sleep 5
+  done
+}
+
+log "=== Bootstrap k3s (IP publique : $EXTERNAL_IP) ==="
+
+# --- Configuration k3s -------------------------------------------------------
+# tls-san : le certificat de l'API inclut l'IP publique (kubectl depuis l'extérieur).
+# node-external-ip : ServiceLB annonce l'IP publique sur les Services LoadBalancer.
+mkdir -p /etc/rancher/k3s
+CONFIG_CHANGED=false
+cat > /etc/rancher/k3s/config.yaml.new <<EOF
+write-kubeconfig-mode: "0600"
+tls-san:
+  - "$EXTERNAL_IP"
+node-external-ip: "$EXTERNAL_IP"
+EOF
+if ! cmp -s /etc/rancher/k3s/config.yaml.new /etc/rancher/k3s/config.yaml; then
+  mv /etc/rancher/k3s/config.yaml.new /etc/rancher/k3s/config.yaml
+  CONFIG_CHANGED=true
+else
+  rm -f /etc/rancher/k3s/config.yaml.new
+fi
+
+# --- Installation k3s --------------------------------------------------------
+if ! command -v k3s >/dev/null 2>&1; then
+  log "Installation de k3s (canal=$K3S_CHANNEL version=$${K3S_VERSION:-<canal>})"
+  curl -sfL https://get.k3s.io \
+    | INSTALL_K3S_CHANNEL="$K3S_CHANNEL" INSTALL_K3S_VERSION="$K3S_VERSION" sh -s - server
+elif [[ "$CONFIG_CHANGED" == "true" ]]; then
+  log "Configuration k3s modifiée, redémarrage du service"
+  systemctl restart k3s
+else
+  log "k3s déjà installé ($(k3s --version | head -n1))"
+fi
+
+log "Attente du nœud Kubernetes"
+retry 300 k3s kubectl get nodes
+retry 300 k3s kubectl wait --for=condition=Ready node --all --timeout=10s
+
+# --- cert-manager (TLS Let's Encrypt automatique) -----------------------------
+if [[ -n "$CERT_MANAGER_VERSION" ]]; then
+  log "Déploiement de cert-manager $CERT_MANAGER_VERSION via le Helm controller k3s"
+  cat > "$MANIFESTS_DIR/cert-manager.yaml" <<EOF
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: cert-manager
+  namespace: kube-system
+spec:
+  repo: https://charts.jetstack.io
+  chart: cert-manager
+  version: "$CERT_MANAGER_VERSION"
+  targetNamespace: cert-manager
+  createNamespace: true
+  valuesContent: |-
+    crds:
+      enabled: true
+EOF
+
+  retry 600 k3s kubectl get crd clusterissuers.cert-manager.io
+  retry 600 k3s kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=10s
+
+  log "Création des ClusterIssuers Let's Encrypt (staging + prod)"
+  for env in staging prod; do
+    if [[ "$env" == "prod" ]]; then
+      server="https://acme-v02.api.letsencrypt.org/directory"
+    else
+      server="https://acme-staging-v02.api.letsencrypt.org/directory"
+    fi
+    issuer_file="/etc/rancher/k3s/letsencrypt-$env.yaml"
+    cat > "$issuer_file" <<EOF
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-$env
+spec:
+  acme:
+    server: $server
+%{ if acme_email != "" ~}
+    email: "${acme_email}"
+%{ endif ~}
+    privateKeySecretRef:
+      name: letsencrypt-$env-account-key
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: traefik
+EOF
+    retry 300 k3s kubectl apply -f "$issuer_file"
+  done
+fi
+
+log "=== Bootstrap terminé ==="
