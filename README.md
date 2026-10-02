@@ -172,6 +172,27 @@ serviront de scénarios d'incidents pour l'agent.
 
 > L'URL est publique : n'importe qui la connaissant peut activer une panne.
 
+#### Alertes
+
+Des alertes Prometheus (`manifest/applications/otel-demo/otel-demo-prometheusrule.yaml`)
+couvrent les pannes injectables. Elles sont routées par Alertmanager et
+visibles dans Grafana > Alerting > Alert rules (règles de la datasource
+Prometheus) :
+
+| Alerte | Condition | Flags qui la déclenchent |
+| --- | --- | --- |
+| `OtelDemoServiceHighErrorRate` (critical) | > 5 % de spans serveur en erreur, 2 min | `productCatalogFailure`, `cartFailure`, `paymentFailure` |
+| `OtelDemoServiceHighLatency` | p95 > 1 s, 5 min | `imageSlowLoad`, `adManualGc` |
+| `OtelDemoKafkaConsumerLag` | lag > 1000 messages, 5 min | `kafkaQueueProblems` |
+| `OtelDemoContainerHighCpu` | > 0,5 cœur, 5 min | `adHighCpu` |
+| `OtelDemoContainerMemoryNearLimit` | > 90 % de la limite mémoire, 5 min | `recommendationCacheFailure` |
+| `OtelDemoContainerOOMKilled` | redémarrage après OOMKill | `recommendationCacheFailure` |
+| `OtelDemoFrontendNoTraffic` | plus de requêtes sur le frontend, 5 min | arrêt du load-generator / frontend |
+
+Test : activer `productCatalogFailure` dans `/feature`. Sous 2 à 5 min,
+`OtelDemoServiceHighErrorRate` passe en *Firing* ; elle se résout quand le
+flag est désactivé.
+
 ### 7. Tester le GitOps
 
 1. Passer `replicas: 2` à `3` dans

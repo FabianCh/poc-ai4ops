@@ -9,3 +9,4 @@ resources:
 - otel-demo-ingress.yaml
 - otel-demo-grafana-ingress.yaml
 - otel-demo-middleware.yaml
+- otel-demo-prometheusrule.yaml

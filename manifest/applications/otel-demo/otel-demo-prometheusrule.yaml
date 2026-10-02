@@ -1,0 +1,134 @@
+---
+# Alertes de l'OpenTelemetry Demo, évaluées par Prometheus et routées par
+# Alertmanager (point d'entrée de l'agent d'auto-remédiation). Chaque alerte
+# couvre au moins une panne injectable via les feature flags (/feature).
+#   Métriques applicatives : traces_span_metrics_* (connecteur spanmetrics du collector)
+#   Métriques conteneurs   : cAdvisor (kubelet) et kube-state-metrics
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: otel-demo
+  namespace: otel-demo
+spec:
+  groups:
+  - name: otel-demo.services
+    rules:
+    - alert: OtelDemoServiceHighErrorRate
+      # Flags : productCatalogFailure, cartFailure, paymentFailure
+      expr: |
+        (
+          sum by (service_name) (rate(traces_span_metrics_calls_total{span_kind="SPAN_KIND_SERVER", status_code="STATUS_CODE_ERROR"}[5m]))
+          /
+          sum by (service_name) (rate(traces_span_metrics_calls_total{span_kind="SPAN_KIND_SERVER"}[5m]))
+        ) > 0.05
+        and
+        sum by (service_name) (rate(traces_span_metrics_calls_total{span_kind="SPAN_KIND_SERVER"}[5m])) > 0.05
+      for: 2m
+      labels:
+        severity: critical
+        namespace: otel-demo
+      annotations:
+        summary: "Taux d'erreur élevé sur le service {{ $labels.service_name }}"
+        description: >-
+          {{ $value | humanizePercentage }} des requêtes reçues par {{ $labels.service_name }}
+          sont en erreur depuis 2 min. Pistes : traces en erreur dans Jaeger
+          (service {{ $labels.service_name }}), logs Loki {service_name="{{ $labels.service_name }}"},
+          feature flags actifs (productCatalogFailure, cartFailure, paymentFailure).
+
+    - alert: OtelDemoServiceHighLatency
+      # Flags : imageSlowLoad, adManualGc
+      expr: |
+        histogram_quantile(0.95,
+          sum by (service_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket{span_kind="SPAN_KIND_SERVER"}[5m]))
+        ) > 1000
+      for: 5m
+      labels:
+        severity: warning
+        namespace: otel-demo
+      annotations:
+        summary: "Latence p95 élevée sur le service {{ $labels.service_name }}"
+        description: >-
+          Le p95 de latence de {{ $labels.service_name }} est de {{ $value | humanize }} ms
+          (seuil 1000 ms) depuis 5 min. Pistes : traces lentes dans Jaeger,
+          CPU / GC du service, feature flags actifs (imageSlowLoad, adManualGc).
+
+    - alert: OtelDemoFrontendNoTraffic
+      # Générateur de charge ou frontend arrêté
+      expr: |
+        sum(rate(traces_span_metrics_calls_total{service_name="frontend", span_kind="SPAN_KIND_SERVER"}[5m])) == 0
+        or
+        absent(traces_span_metrics_calls_total{service_name="frontend", span_kind="SPAN_KIND_SERVER"})
+      for: 5m
+      labels:
+        severity: warning
+        namespace: otel-demo
+      annotations:
+        summary: "Le frontend de la démo ne reçoit plus de trafic"
+        description: >-
+          Aucune requête serveur sur le frontend depuis 5 min. Pistes : pods
+          load-generator, frontend et frontend-proxy, collector OpenTelemetry
+          (la télémétrie n'arrive peut-être plus dans Prometheus).
+
+    - alert: OtelDemoKafkaConsumerLag
+      # Flag : kafkaQueueProblems
+      expr: |
+        sum by (group, topic) (kafka_consumer_group_lag) > 1000
+      for: 5m
+      labels:
+        severity: warning
+        namespace: otel-demo
+      annotations:
+        summary: "Retard de consommation Kafka pour le groupe {{ $labels.group }}"
+        description: >-
+          Le consumer group {{ $labels.group }} a {{ $value }} messages de retard
+          sur le topic {{ $labels.topic }} depuis 5 min. Pistes : services
+          accounting et fraud-detection, feature flag kafkaQueueProblems.
+
+  - name: otel-demo.containers
+    rules:
+    - alert: OtelDemoContainerHighCpu
+      # Flag : adHighCpu (pas de limite CPU dans la démo : CPUThrottlingHigh ne se déclenche pas)
+      expr: |
+        sum by (namespace, pod, container) (
+          rate(container_cpu_usage_seconds_total{namespace="otel-demo", container!="", container!="POD"}[5m])
+        ) > 0.5
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "CPU élevé pour {{ $labels.namespace }}/{{ $labels.pod }} ({{ $labels.container }})"
+        description: >-
+          Le conteneur {{ $labels.container }} consomme {{ $value | humanize }} cœur(s)
+          depuis 5 min (seuil 0.5). Pistes : profil de charge, feature flag adHighCpu.
+
+    - alert: OtelDemoContainerMemoryNearLimit
+      # Flag : recommendationCacheFailure (fuite mémoire), avant l'OOMKill
+      expr: |
+        max by (namespace, pod, container) (container_memory_working_set_bytes{namespace="otel-demo", container!="", container!="POD"})
+        /
+        max by (namespace, pod, container) (kube_pod_container_resource_limits{namespace="otel-demo", resource="memory"})
+        > 0.9
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Mémoire proche de la limite pour {{ $labels.namespace }}/{{ $labels.pod }} ({{ $labels.container }})"
+        description: >-
+          Le conteneur {{ $labels.container }} utilise {{ $value | humanizePercentage }}
+          de sa limite mémoire depuis 5 min. Risque d'OOMKill. Pistes : fuite
+          mémoire, feature flag recommendationCacheFailure.
+
+    - alert: OtelDemoContainerOOMKilled
+      # Flag : recommendationCacheFailure
+      expr: |
+        (max by (namespace, pod, container) (increase(kube_pod_container_status_restarts_total{namespace="otel-demo"}[10m])) > 0)
+        and on (namespace, pod, container)
+        (max by (namespace, pod, container) (kube_pod_container_status_last_terminated_reason{namespace="otel-demo", reason="OOMKilled"}) == 1)
+      labels:
+        severity: warning
+      annotations:
+        summary: "OOMKill de {{ $labels.namespace }}/{{ $labels.pod }} ({{ $labels.container }})"
+        description: >-
+          Le conteneur {{ $labels.container }} a redémarré après un OOMKill dans
+          les 10 dernières minutes. Pistes : courbe mémoire du conteneur, fuite
+          mémoire, feature flag recommendationCacheFailure.
