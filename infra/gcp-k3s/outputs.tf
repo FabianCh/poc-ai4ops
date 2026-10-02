@@ -42,3 +42,8 @@ output "grafana_url" {
   description = "URL de Grafana (utilisateur admin, mot de passe dans le secret monitoring/kube-prometheus-stack-grafana)."
   value       = "https://grafana.${google_compute_address.ingress.address}.sslip.io"
 }
+
+output "otel_demo_url" {
+  description = "URL de l'OpenTelemetry Demo (boutique, /feature, /jaeger/ui, /loadgen)."
+  value       = "https://otel-demo.${google_compute_address.ingress.address}.sslip.io"
+}

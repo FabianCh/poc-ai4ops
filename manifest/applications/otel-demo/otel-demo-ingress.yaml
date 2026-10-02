@@ -1,0 +1,28 @@
+---
+# frontend-proxy (Envoy) sert la boutique et les UIs de la démo :
+#   /          boutique          /feature   feature flags (injection de pannes)
+#   /jaeger/ui traces            /loadgen   générateur de charge (Locust)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: otel-demo
+  namespace: otel-demo
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - otel-demo.${INGRESS_BASE_DOMAIN}
+    secretName: otel-demo-tls
+  rules:
+  - host: otel-demo.${INGRESS_BASE_DOMAIN}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-proxy
+            port:
+              number: 8080

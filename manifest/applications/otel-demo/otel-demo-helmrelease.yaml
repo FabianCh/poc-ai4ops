@@ -1,0 +1,66 @@
+---
+# OpenTelemetry Demo (Astronomy Shop) : microservices instrumentés en OTel,
+# générateur de charge (Locust) et feature flags flagd pour injecter des pannes.
+# La télémétrie est envoyée vers la stack du namespace monitoring :
+#   métriques -> Prometheus (OTLP), logs -> Loki (OTLP), traces -> Jaeger (ce chart).
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: otel-demo
+  namespace: otel-demo
+spec:
+  interval: 30m
+  timeout: 15m
+  chart:
+    spec:
+      chart: opentelemetry-demo
+      version: 0.42.1
+      sourceRef:
+        kind: HelmRepository
+        name: open-telemetry
+      interval: 12h
+  values:
+    # Remplacés par la stack monitoring du cluster
+    prometheus:
+      enabled: false
+    grafana:
+      enabled: false
+    opensearch:
+      enabled: false
+
+    jaeger:
+      jaeger:
+        extraEnv:
+        - name: MEMORY_MAX_TRACES
+          value: "25000"
+        # Métriques RED (Service Performance Monitoring) lues dans notre Prometheus
+        - name: PROMETHEUS_ADDR
+          value: kube-prometheus-stack-prometheus.monitoring.svc:9090
+        - name: OTEL_COLLECTOR_HOST
+          value: otel-collector
+        - name: OTEL_COLLECTOR_PORT_HTTP
+          value: "4318"
+        - name: JAEGER_HOST
+          value: "0.0.0.0"
+        - name: JAEGER_GRPC_PORT
+          value: "4317"
+
+    opentelemetry-collector:
+      config:
+        exporters:
+          otlp_http/prometheus:
+            endpoint: http://kube-prometheus-stack-prometheus.monitoring.svc:9090/api/v1/otlp
+            tls:
+              insecure: true
+          otlp_http/loki:
+            endpoint: http://loki.monitoring.svc:3100/otlp
+            tls:
+              insecure: true
+            sending_queue:
+              batch: {}
+        service:
+          pipelines:
+            # L'exporter opensearch du chart reste défini mais n'est plus utilisé
+            # (un composant hors pipeline n'est pas instancié par le collector).
+            logs:
+              exporters: [otlp_http/loki, debug]

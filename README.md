@@ -28,7 +28,7 @@ POC d'**AIOps agentique** : un agent IA capable de détecter, diagnostiquer et
         │  │   ├─ cert-manager + ClusterIssuers Let's Encrypt      │  │
         │  │   ├─ monitoring : Prometheus, Alertmanager, Grafana,  │  │
         │  │   │              Loki + Alloy (logs et événements)    │  │
-        │  │   └─ applications (ex : demo-whoami)                  │  │
+        │  │   └─ applications : demo-whoami, OpenTelemetry Demo   │  │
         │  └───────────────────────────────────────────────────────┘  │
         │  VPC dédié · firewall 80/443 public · 22/6443 IAP/admin      │
         └──────────────────────────────────────────────────────────────┘
@@ -50,7 +50,7 @@ certificat Let's Encrypt automatiquement.
 | [`infra/gcp-k3s/`](infra/gcp-k3s/) | Terraform : réseau, firewall, IP statique, VM + bootstrap k3s |
 | [`manifest/flux-system/`](manifest/flux-system/) | Bootstrap FluxCD et Kustomizations Flux (`base/`, `applications/`) |
 | [`manifest/base/`](manifest/base/) | Socle : cert-manager, ClusterIssuers Let's Encrypt, observabilité (kube-prometheus-stack, Loki, Alloy) |
-| [`manifest/applications/`](manifest/applications/) | Applications (ex : `demo-whoami` exposée sur Internet) |
+| [`manifest/applications/`](manifest/applications/) | Applications : `demo-whoami`, `otel-demo` (OpenTelemetry Demo) |
 | [`bin/`](bin/) | Kubeconfig, upgrade Flux, validation des manifests |
 | `Makefile` | Raccourcis (`make help`) |
 
@@ -133,7 +133,40 @@ Dans Grafana > Explore > Loki :
 - `{namespace="demo-whoami"}` : logs de l'application de démo ;
 - `{job="kubernetes-events"}` : événements Kubernetes (BackOff, OOMKilled…).
 
-### 6. Tester le GitOps
+### 6. OpenTelemetry Demo
+
+L'[OpenTelemetry Demo](https://opentelemetry.io/docs/demo/) (Astronomy Shop)
+est déployée dans le namespace `otel-demo` : une quinzaine de microservices
+instrumentés en OpenTelemetry, un générateur de charge permanent (Locust) et des
+feature flags pour **injecter des pannes**. Sa télémétrie alimente la stack du
+cluster :
+
+| Signal | Destination | Où le voir |
+| --- | --- | --- |
+| Traces | Jaeger (fourni par la démo) | `/jaeger/ui` ou Grafana > Explore > Jaeger |
+| Métriques | Prometheus (récepteur OTLP) | Grafana > Explore > Prometheus, ex : `sum by (service_name) (rate(traces_span_metrics_calls_total[5m]))` |
+| Logs | Loki (OTLP) | Grafana > Explore > Loki, ex : `{service_name="cart"}` |
+
+```bash
+terraform -chdir=infra/gcp-k3s output -raw otel_demo_url    # https://otel-demo.<IP>.sslip.io
+```
+
+| URL | Contenu |
+| --- | --- |
+| `/` | Boutique |
+| `/feature` | Feature flags flagd : injection de pannes |
+| `/jaeger/ui` | Traces |
+| `/loadgen` | Générateur de charge Locust |
+
+Exemples de pannes activables dans `/feature` : `productCatalogFailure`,
+`cartFailure`, `paymentFailure`, `adHighCpu`, `adManualGc`,
+`recommendationCacheFailure` (fuite mémoire), `kafkaQueueProblems`,
+`imageSlowLoad`. Ces pannes
+serviront de scénarios d'incidents pour l'agent.
+
+> L'URL est publique : n'importe qui la connaissant peut activer une panne.
+
+### 7. Tester le GitOps
 
 1. Passer `replicas: 2` à `3` dans
    `manifest/applications/demo-whoami/demo-whoami-deployment.yaml`.
@@ -141,7 +174,7 @@ Dans Grafana > Explore > Loki :
 3. `make flux-reconcile` (ou attendre ~1 min), puis
    `kubectl -n demo-whoami get pods` : 3 pods.
 
-### 7. Nettoyer
+### 8. Nettoyer
 
 ```bash
 make destroy
@@ -180,6 +213,7 @@ Détails : [`infra/gcp-k3s/README.md`](infra/gcp-k3s/README.md) (infra) et
 - [x] Plateforme : VM GCP + k3s + exposition Internet (Traefik, TLS Let's Encrypt)
 - [x] GitOps : déploiement via FluxCD (`manifest/`), installé automatiquement
 - [x] Observabilité : Prometheus / Alertmanager / Grafana, Loki (logs + événements Kubernetes)
-- [ ] Applications cibles et scénarios d'incidents reproductibles (chaos)
+- [x] Application cible : OpenTelemetry Demo, avec pannes injectables par feature flags
+- [ ] Scénarios d'incidents reproductibles (catalogue, déclenchement automatisé)
 - [ ] Agent de diagnostic (LLM + outils K8s en lecture seule)
 - [ ] Remédiation automatique avec garde-fous (dry-run, approbation, audit)

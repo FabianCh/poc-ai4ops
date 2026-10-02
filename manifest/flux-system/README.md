@@ -47,4 +47,6 @@ flowchart TD
     loki ---> |dependsOn| alloy
     cluster-issuers ---> |dependsOn| demo-whoami
     applications --> demo-whoami
+    applications --> otel-demo
+    loki ---> |dependsOn| otel-demo
 ```
