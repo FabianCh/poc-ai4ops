@@ -52,7 +52,16 @@ certificat Let's Encrypt automatiquement.
 | [`manifest/base/`](manifest/base/) | Socle : cert-manager, ClusterIssuers Let's Encrypt, observabilité (kube-prometheus-stack, Loki, Alloy) |
 | [`manifest/applications/`](manifest/applications/) | Applications : `demo-whoami`, `otel-demo` (OpenTelemetry Demo) |
 | [`bin/`](bin/) | Kubeconfig, upgrade Flux, validation des manifests |
+| [`docs/`](docs/) | Endpoints, accès depuis Cloud Shell, coûts |
 | `Makefile` | Raccourcis (`make help`) |
+
+## Documentation
+
+| Document | Contenu |
+| --- | --- |
+| [docs/endpoints.md](docs/endpoints.md) | Tous les endpoints : publics (Grafana, OTel Demo, feature flags…), API, services internes |
+| [docs/cloudshell.md](docs/cloudshell.md) | Récupérer URLs, mot de passe Grafana et kubeconfig depuis Cloud Shell |
+| [docs/couts.md](docs/couts.md) | Coût de la VM 24/7, à la journée, arrêtée ; recommandations |
 
 ## Tester le POC
 
