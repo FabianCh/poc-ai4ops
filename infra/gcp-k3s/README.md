@@ -18,7 +18,7 @@ Provisionne sur Google Cloud une VM Compute Engine exécutant un cluster
 
 Le [startup script](templates/startup.sh.tftpl) (idempotent, rejoué à chaque boot) :
 
-1. écrit `/etc/rancher/k3s/config.yaml` (`tls-san` et `node-external-ip` = IP publique) ;
+1. écrit `/etc/rancher/k3s/config.yaml` (`tls-san` = IP publique, pour kubectl depuis l'extérieur) ;
 2. installe k3s via `get.k3s.io` (canal `stable` ou version pinnée) — Traefik et
    ServiceLB sont fournis par défaut et écoutent sur 80/443 du nœud ;
 3. crée la ConfigMap `flux-system/cluster-vars` (`EXTERNAL_IP`,

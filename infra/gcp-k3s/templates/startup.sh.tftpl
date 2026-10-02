@@ -35,14 +35,15 @@ log "=== Bootstrap k3s (IP publique : $EXTERNAL_IP) ==="
 
 # --- Configuration k3s -------------------------------------------------------
 # tls-san : le certificat de l'API inclut l'IP publique (kubectl depuis l'extérieur).
-# node-external-ip : ServiceLB annonce l'IP publique sur les Services LoadBalancer.
+# Ne PAS définir node-external-ip : k3s l'utiliserait comme advertise-address de
+# l'API, et les pods joindraient alors l'API (10.43.0.1) via l'IP publique,
+# bloquée par le firewall GCP sur le port 6443 (timeout).
 mkdir -p /etc/rancher/k3s
 CONFIG_CHANGED=false
 cat > /etc/rancher/k3s/config.yaml.new <<EOF
 write-kubeconfig-mode: "0600"
 tls-san:
   - "$EXTERNAL_IP"
-node-external-ip: "$EXTERNAL_IP"
 EOF
 if ! cmp -s /etc/rancher/k3s/config.yaml.new /etc/rancher/k3s/config.yaml; then
   mv /etc/rancher/k3s/config.yaml.new /etc/rancher/k3s/config.yaml
