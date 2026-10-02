@@ -182,10 +182,10 @@ Prometheus) :
 | Alerte | Condition | Flags qui la déclenchent |
 | --- | --- | --- |
 | `OtelDemoServiceHighErrorRate` (critical) | > 5 % de spans serveur en erreur, 2 min | `productCatalogFailure`, `cartFailure`, `paymentFailure` |
-| `OtelDemoServiceHighLatency` | p95 > 1 s, 5 min | `imageSlowLoad`, `adManualGc` |
+| `OtelDemoServiceHighLatency` | p95 > 1 s, 5 min (hors services LLM agent/chatbot/mcp) | `imageSlowLoad`, `adManualGc` |
 | `OtelDemoKafkaConsumerLag` | lag > 1000 messages, 5 min | `kafkaQueueProblems` |
-| `OtelDemoContainerHighCpu` | > 0,5 cœur, 5 min | `adHighCpu` |
-| `OtelDemoContainerMemoryNearLimit` | > 90 % de la limite mémoire, 5 min | `recommendationCacheFailure` |
+| `OtelDemoContainerHighCpu` | > 0,5 cœur, 5 min (hors load-generator) | `adHighCpu` |
+| `OtelDemoContainerMemoryNearLimit` | > 90 % de la limite mémoire, 5 min (hors runtimes JVM/.NET/Go qui régulent leur mémoire près de la limite) | `recommendationCacheFailure` |
 | `OtelDemoContainerOOMKilled` | redémarrage après OOMKill | `recommendationCacheFailure` |
 | `OtelDemoFrontendNoTraffic` | plus de requêtes sur le frontend, 5 min | arrêt du load-generator / frontend |
 

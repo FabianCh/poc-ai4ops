@@ -37,9 +37,10 @@ spec:
 
     - alert: OtelDemoServiceHighLatency
       # Flags : imageSlowLoad, adManualGc
+      # Services LLM (agent, chatbot, mcp) exclus : p95 nominal proche de 1 s
       expr: |
         histogram_quantile(0.95,
-          sum by (service_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket{span_kind="SPAN_KIND_SERVER"}[5m]))
+          sum by (service_name, le) (rate(traces_span_metrics_duration_milliseconds_bucket{span_kind="SPAN_KIND_SERVER", service_name!~"agent|chatbot|mcp"}[5m]))
         ) > 1000
       for: 5m
       labels:
@@ -71,8 +72,9 @@ spec:
 
     - alert: OtelDemoKafkaConsumerLag
       # Flag : kafkaQueueProblems
+      # kafka.consumer_group.lag_sum (unité "1") devient *_ratio après conversion OTLP
       expr: |
-        sum by (group, topic) (kafka_consumer_group_lag) > 1000
+        sum by (group, topic) (kafka_consumer_group_lag_sum_ratio) > 1000
       for: 5m
       labels:
         severity: warning
@@ -88,9 +90,10 @@ spec:
     rules:
     - alert: OtelDemoContainerHighCpu
       # Flag : adHighCpu (pas de limite CPU dans la démo : CPUThrottlingHigh ne se déclenche pas)
+      # load-generator exclu : ~1 cœur en permanence (Locust + navigateur headless)
       expr: |
         sum by (namespace, pod, container) (
-          rate(container_cpu_usage_seconds_total{namespace="otel-demo", container!="", container!="POD"}[5m])
+          rate(container_cpu_usage_seconds_total{namespace="otel-demo", container!="", container!~"POD|load-generator"}[5m])
         ) > 0.5
       for: 5m
       labels:
@@ -103,8 +106,11 @@ spec:
 
     - alert: OtelDemoContainerMemoryNearLimit
       # Flag : recommendationCacheFailure (fuite mémoire), avant l'OOMKill
+      # Exclus : runtimes qui régulent leur mémoire au plus près de la limite en
+      # fonctionnement normal (JVM : ad, fraud-detection, kafka ; .NET : accounting ;
+      # Go avec GOMEMLIMIT : flagd). Leurs OOM restent couverts par OtelDemoContainerOOMKilled.
       expr: |
-        max by (namespace, pod, container) (container_memory_working_set_bytes{namespace="otel-demo", container!="", container!="POD"})
+        max by (namespace, pod, container) (container_memory_working_set_bytes{namespace="otel-demo", container!="", container!~"POD|ad|fraud-detection|accounting|flagd|kafka"})
         /
         max by (namespace, pod, container) (kube_pod_container_resource_limits{namespace="otel-demo", resource="memory"})
         > 0.9
