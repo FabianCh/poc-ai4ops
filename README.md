@@ -32,9 +32,10 @@ POC d'**AIOps agentique** : un agent IA capable de détecter, diagnostiquer et
         └──────────────────────────────────────────────────────────────┘
 ```
 
-Terraform ne fait que créer la VM et installer k3s ; tout ce qui tourne dans le
-cluster est déployé par **FluxCD** depuis le dossier [`manifest/`](manifest/)
-(même organisation que le projet home-server). Les applications sont exposées
+Un seul `terraform apply` suffit : la VM installe k3s puis **FluxCD**, qui
+déploie tout le contenu du cluster depuis le dossier [`manifest/`](manifest/)
+de la branche `main` (même organisation que le projet home-server). Le repo est
+public, Flux le lit en HTTPS sans aucun secret. Les applications sont exposées
 via un `Ingress` Traefik. Sans nom de domaine,
 on utilise le DNS wildcard [sslip.io](https://sslip.io) :
 `<app>.<IP_PUBLIQUE>.sslip.io` résout vers la VM, et cert-manager obtient un
@@ -48,35 +49,34 @@ certificat Let's Encrypt automatiquement.
 | [`manifest/flux-system/`](manifest/flux-system/) | Bootstrap FluxCD et Kustomizations Flux (`base/`, `applications/`) |
 | [`manifest/base/`](manifest/base/) | Socle : cert-manager, ClusterIssuers Let's Encrypt |
 | [`manifest/applications/`](manifest/applications/) | Applications (ex : `demo-whoami` exposée sur Internet) |
-| [`bin/`](bin/) | Kubeconfig, bootstrap/upgrade Flux, chiffrement SOPS, validation des manifests |
+| [`bin/`](bin/) | Kubeconfig, upgrade Flux, validation des manifests |
 | `Makefile` | Raccourcis (`make help`) |
 
 ## Démarrage rapide
 
 Prérequis : `terraform` >= 1.5, `gcloud` authentifié (`gcloud auth login` et
-`gcloud auth application-default login`), `kubectl`, `flux`, `sops`, un projet
-GCP avec facturation, et la clé age `age.agekey` (la même que home-server).
+`gcloud auth application-default login`), un projet GCP avec facturation.
+Optionnel : `kubectl` et `flux` pour inspecter le cluster.
 
 ```bash
 cp infra/gcp-k3s/terraform.tfvars.example infra/gcp-k3s/terraform.tfvars
-# éditer project_id (et admin_source_ranges = ["<votre IP>/32"])
+# éditer project_id
 
 make init
-make apply          # ~1 min pour la VM, puis ~3-5 min de bootstrap k3s
-make logs           # suivre l'installation (Ctrl+C quand "Bootstrap terminé")
+make apply          # VM ~1 min, puis k3s + Flux + cert-manager + démo en ~5 min
+make logs           # (optionnel) suivre le bootstrap de la VM
 
-make kubeconfig     # écrit .kube/config (utilisé automatiquement par make)
-export KUBECONFIG=$PWD/.kube/config
-kubectl get nodes
-
-# Flux : créer une deploy key GitHub (lecture seule) puis
-make flux-bootstrap FLUX_KEY=./flux-deploy-key AGE_KEY=./age.agekey
-make flux-status    # cert-manager → cluster-issuers → demo-whoami
-curl https://whoami.$(terraform -chdir=infra/gcp-k3s output -raw ingress_base_domain)
+curl "$(terraform -chdir=infra/gcp-k3s output -raw demo_url)"
 ```
 
-Sans `admin_source_ranges` : `make kubeconfig-iap` puis `make tunnel` dans un
-terminal séparé (l'API est alors joignable sur `https://127.0.0.1:6443`).
+Accès au cluster (optionnel) :
+
+```bash
+make kubeconfig     # nécessite admin_source_ranges = ["<votre IP>/32"]
+# ou : make kubeconfig-iap puis `make tunnel` dans un autre terminal
+export KUBECONFIG=$PWD/.kube/config
+make flux-status
+```
 
 Nettoyage : `make destroy`.
 
@@ -89,14 +89,16 @@ Détails : [`infra/gcp-k3s/README.md`](infra/gcp-k3s/README.md) (infra) et
    (`<app>-namespace.yaml`, `<app>-deployment.yaml`, `<app>-ingress.yaml`...).
 2. `manifest/flux-system/applications/<app>-ks.yaml` (copier `demo-whoami-ks.yaml`)
    et l'ajouter dans `manifest/flux-system/applications/kustomization.yaml`.
-3. Secrets : `bin/encrypt_secret.sh manifest/applications/<app>/<app>-secret.yaml`.
-4. `make lint`, commit, push sur `main` : Flux déploie (≤ 1 min).
+3. `make lint`, commit, push sur `main` : Flux déploie (≤ 1 min).
+
+> Le repo étant public, ne jamais y committer de secret : seule la clé GCP
+> (credentials `gcloud`, jamais dans le repo) est sensible dans ce POC.
 
 ## Feuille de route
 
 - [x] Initialisation du repo
 - [x] Plateforme : VM GCP + k3s + exposition Internet (Traefik, TLS Let's Encrypt)
-- [x] GitOps : déploiement via FluxCD (`manifest/`), secrets SOPS + age
+- [x] GitOps : déploiement via FluxCD (`manifest/`), installé automatiquement
 - [ ] Observabilité : Prometheus / Alertmanager, logs, événements Kubernetes
 - [ ] Applications cibles et scénarios d'incidents reproductibles (chaos)
 - [ ] Agent de diagnostic (LLM + outils K8s en lecture seule)

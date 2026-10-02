@@ -1,7 +1,0 @@
-# Chiffrement des Secrets Kubernetes pour FluxCD (SOPS + age) :
-# seuls les champs data/stringData sont chiffrés.
-# Clé publique age identique à celle du projet home-server (même age.agekey).
-creation_rules:
-  - path_regex: manifest/.*\.ya?ml$
-    encrypted_regex: ^(data|stringData)$
-    age: age1fem6utmpr9du50wf7g536ucm0ef8cxfnfn348nks6wjwf3v644ssfk5exa

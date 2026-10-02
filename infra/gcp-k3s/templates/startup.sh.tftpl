@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Bootstrap du nœud k3s — rendu par Terraform (templatefile) et exécuté par
 # google-startup-scripts à chaque démarrage de la VM : le script est idempotent.
-# Il installe k3s et prépare les variables du cluster ; tout le reste
-# (cert-manager, applications...) est déployé par FluxCD depuis manifest/.
+# Il installe k3s, prépare les variables du cluster et installe FluxCD ; tout
+# le reste (cert-manager, applications...) est déployé par Flux depuis manifest/.
 # Logs : /var/log/k3s-bootstrap.log
 set -euo pipefail
 exec > >(tee -a /var/log/k3s-bootstrap.log) 2>&1
@@ -10,6 +10,9 @@ exec > >(tee -a /var/log/k3s-bootstrap.log) 2>&1
 EXTERNAL_IP="${external_ip}"
 K3S_CHANNEL="${k3s_channel}"
 K3S_VERSION="${k3s_version}"
+FLUX_VERSION="${flux_version}"
+FLUX_GIT_URL="${flux_git_url}"
+FLUX_BRANCH="${flux_branch}"
 
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
@@ -84,5 +87,44 @@ data:
   INGRESS_BASE_DOMAIN: "$EXTERNAL_IP.sslip.io"
 EOF
 retry 300 k3s kubectl apply -f /etc/rancher/k3s/cluster-vars.yaml
+
+# --- FluxCD -------------------------------------------------------------------
+# Installation initiale uniquement : ensuite Flux se gère lui-même depuis le repo
+# (manifest/flux-system/gotk-components.yaml et gotk-sync.yaml).
+if [[ -n "$FLUX_GIT_URL" ]] && ! k3s kubectl -n flux-system get gitrepository flux-system >/dev/null 2>&1; then
+  log "Installation de Flux $FLUX_VERSION"
+  curl -sfL --retry 5 -o /etc/rancher/k3s/flux-install.yaml \
+    "https://github.com/fluxcd/flux2/releases/download/$FLUX_VERSION/install.yaml"
+  retry 300 k3s kubectl apply --server-side -f /etc/rancher/k3s/flux-install.yaml
+  retry 600 k3s kubectl -n flux-system wait --for=condition=Available deployment --all --timeout=10s
+
+  log "Synchronisation de Flux sur $FLUX_GIT_URL ($FLUX_BRANCH)"
+  cat > /etc/rancher/k3s/flux-sync.yaml <<EOF
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: flux-system
+  namespace: flux-system
+spec:
+  interval: 1m0s
+  ref:
+    branch: $FLUX_BRANCH
+  url: $FLUX_GIT_URL
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: flux-system
+  namespace: flux-system
+spec:
+  interval: 10m0s
+  path: ./manifest/flux-system
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+EOF
+  retry 300 k3s kubectl apply -f /etc/rancher/k3s/flux-sync.yaml
+fi
 
 log "=== Bootstrap terminé ==="

@@ -24,10 +24,11 @@ Le [startup script](templates/startup.sh.tftpl) (idempotent, rejoué à chaque b
 2. installe k3s via `get.k3s.io` (canal `stable` ou version pinnée) — Traefik et
    ServiceLB sont fournis par défaut et écoutent sur 80/443 du nœud ;
 3. crée la ConfigMap `flux-system/cluster-vars` (`EXTERNAL_IP`,
-   `INGRESS_BASE_DOMAIN`) utilisée par Flux pour générer les hosts d'Ingress.
+   `INGRESS_BASE_DOMAIN`) utilisée par Flux pour générer les hosts d'Ingress ;
+4. au premier boot, installe **FluxCD** et le synchronise sur `flux_git_url`.
 
-Le reste (Flux, cert-manager, ClusterIssuers, applications) est déployé en
-GitOps depuis [`manifest/`](../../manifest/flux-system/README.md).
+Le reste (cert-manager, ClusterIssuers, applications) est déployé en GitOps
+depuis [`manifest/`](../../manifest/flux-system/README.md).
 
 Logs : `/var/log/k3s-bootstrap.log` (`make logs`).
 
@@ -43,6 +44,8 @@ Logs : `/var/log/k3s-bootstrap.log` (`make logs`).
 | `admin_source_ranges` | `[]` | IPs autorisées en direct sur 22/6443 |
 | `ingress_source_ranges` | `["0.0.0.0/0"]` | IPs autorisées sur 80/443 |
 | `k3s_channel` / `k3s_version` | `stable` / `""` | Version de k3s |
+| `flux_git_url` / `flux_branch` | ce repo / `main` | Repo public synchronisé par Flux (`""` = pas de Flux) |
+| `flux_version` | `v2.9.5` | Version de Flux installée au premier boot |
 
 Voir [`variables.tf`](variables.tf) pour la liste complète.
 

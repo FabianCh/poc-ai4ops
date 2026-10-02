@@ -28,7 +28,7 @@ __pycache__/
 *.pyc
 .venv/
 
-# Clés (age / deploy key Flux)
+# Clés (ne jamais committer : repo public)
 *.agekey
 flux-deploy-key*
 private.key

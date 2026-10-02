@@ -32,3 +32,8 @@ output "bootstrap_logs_command" {
   description = "Suivre l'installation de k3s sur la VM."
   value       = "gcloud compute ssh ${google_compute_instance.k3s.name} --project ${var.project_id} --zone ${var.zone} --tunnel-through-iap --command 'sudo tail -f /var/log/k3s-bootstrap.log'"
 }
+
+output "demo_url" {
+  description = "URL de l'application de démo (déployée par Flux quelques minutes après le boot)."
+  value       = "https://whoami.${google_compute_address.ingress.address}.sslip.io"
+}

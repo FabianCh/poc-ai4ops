@@ -47,11 +47,7 @@ tunnel: ## Ouvre un tunnel IAP vers l'API Kubernetes sur localhost:6443
 	  --zone "$$($(TF) output -raw zone)"
 
 ## --- GitOps (FluxCD) ---
-.PHONY: flux-bootstrap flux-status flux-reconcile
-flux-bootstrap: ## Installe Flux (FLUX_KEY=<clé deploy key> AGE_KEY=<age.agekey>)
-	@test -n "$(FLUX_KEY)" -a -n "$(AGE_KEY)" || { echo "Usage : make flux-bootstrap FLUX_KEY=./flux-deploy-key AGE_KEY=./age.agekey"; exit 1; }
-	bin/fluxcd/bootstrap.sh "$(FLUX_KEY)" "$(AGE_KEY)"
-
+.PHONY: flux-status flux-reconcile
 flux-status: ## État des Kustomizations et HelmReleases Flux
 	flux get kustomizations
 	flux get helmreleases -A

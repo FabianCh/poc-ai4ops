@@ -14,10 +14,6 @@ spec:
     kind: GitRepository
     name: flux-system
   targetNamespace: demo-whoami
-  decryption:
-    provider: sops
-    secretRef:
-      name: sops-age
   # Variables du cluster (INGRESS_BASE_DOMAIN...) créées par le bootstrap de la VM
   postBuild:
     substituteFrom:

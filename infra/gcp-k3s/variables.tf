@@ -90,6 +90,24 @@ variable "k3s_version" {
   default     = ""
 }
 
+variable "flux_git_url" {
+  description = "Repo Git (public) synchronisé par Flux. Vide = ne pas installer Flux."
+  type        = string
+  default     = "https://github.com/FabianCh/poc-ai4ops"
+}
+
+variable "flux_branch" {
+  description = "Branche Git synchronisée par Flux."
+  type        = string
+  default     = "main"
+}
+
+variable "flux_version" {
+  description = "Version de Flux installée au premier démarrage (même version que manifest/flux-system/gotk-components.yaml)."
+  type        = string
+  default     = "v2.9.5"
+}
+
 variable "labels" {
   description = "Labels appliqués aux ressources."
   type        = map(string)

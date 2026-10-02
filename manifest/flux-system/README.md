@@ -4,32 +4,18 @@
 `main` de ce repo : il réconcilie `manifest/flux-system/`, qui référence à son
 tour les Kustomizations de `base/` et `applications/`.
 
-## Bootstrap (one-shot)
+## Installation (automatique)
 
-Deux secrets sont nécessaires : une clé SSH pour lire ce repo GitHub, et la clé
-age pour déchiffrer les secrets SOPS.
+Aucune action manuelle : au premier démarrage, le startup script de la VM
+([`startup.sh.tftpl`](../../infra/gcp-k3s/templates/startup.sh.tftpl)) :
 
-```bash
-# 1. Deploy key GitHub (lecture seule) : Settings > Deploy keys > Add deploy key
-ssh-keygen -t ed25519 -N "" -C flux-poc-ai4ops -f ./flux-deploy-key
-cat ./flux-deploy-key.pub
+1. applique `install.yaml` de la release Flux (`flux_version`, défaut `v2.9.5`) ;
+2. crée le `GitRepository` + la `Kustomization` `flux-system` (équivalent de
+   `gotk-sync.yaml`), pointant en HTTPS sur ce repo public, branche `main`.
 
-# 2. Installation de Flux (secrets flux-system + sops-age, contrôleurs, sync)
-make flux-bootstrap FLUX_KEY=./flux-deploy-key AGE_KEY=./age.agekey
-```
-
-Équivalent manuel :
-
-```bash
-flux create secret git flux-system --url=ssh://git@github.com/FabianCh/poc-ai4ops \
-  --private-key-file=./flux-deploy-key
-cat age.agekey | kubectl create secret generic sops-age \
-  --namespace=flux-system --from-file=age.agekey=/dev/stdin
-kubectl apply --server-side -f manifest/flux-system/gotk-components.yaml
-kubectl apply --server-side -k manifest/flux-system
-```
-
-Mise à jour de Flux : mettre à jour la CLI `flux`, puis `bin/fluxcd/upgrade_fluxcd.sh`.
+Flux se gère ensuite lui-même depuis ce dossier (`gotk-components.yaml`,
+`gotk-sync.yaml`). Pour le mettre à jour : mettre à jour la CLI `flux`, puis
+`bin/fluxcd/upgrade_fluxcd.sh` (et la variable Terraform `flux_version`).
 
 ## Variables du cluster
 
