@@ -28,11 +28,9 @@ resource "google_compute_instance" "k3s" {
   metadata = {
     enable-oslogin = "TRUE"
     startup-script = templatefile("${path.module}/templates/startup.sh.tftpl", {
-      external_ip          = google_compute_address.ingress.address
-      k3s_channel          = var.k3s_channel
-      k3s_version          = var.k3s_version
-      cert_manager_version = var.cert_manager_version
-      acme_email           = var.acme_email
+      external_ip = google_compute_address.ingress.address
+      k3s_channel = var.k3s_channel
+      k3s_version = var.k3s_version
     })
   }
 

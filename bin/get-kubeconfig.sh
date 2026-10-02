@@ -2,9 +2,9 @@
 # Récupère le kubeconfig du cluster k3s et l'écrit dans .kube/config (local au repo).
 #
 # Usage :
-#   scripts/get-kubeconfig.sh          # API joignable directement sur l'IP publique
+#   bin/get-kubeconfig.sh          # API joignable directement sur l'IP publique
 #                                      # (nécessite admin_source_ranges dans Terraform)
-#   scripts/get-kubeconfig.sh --iap    # API via tunnel IAP sur localhost:6443
+#   bin/get-kubeconfig.sh --iap    # API via tunnel IAP sur localhost:6443
 #                                      # (lancer ensuite : make tunnel)
 set -euo pipefail
 

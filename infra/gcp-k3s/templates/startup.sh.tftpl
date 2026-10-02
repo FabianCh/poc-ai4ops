@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Bootstrap du nœud k3s — rendu par Terraform (templatefile) et exécuté par
 # google-startup-scripts à chaque démarrage de la VM : le script est idempotent.
+# Il installe k3s et prépare les variables du cluster ; tout le reste
+# (cert-manager, applications...) est déployé par FluxCD depuis manifest/.
 # Logs : /var/log/k3s-bootstrap.log
 set -euo pipefail
 exec > >(tee -a /var/log/k3s-bootstrap.log) 2>&1
@@ -8,10 +10,8 @@ exec > >(tee -a /var/log/k3s-bootstrap.log) 2>&1
 EXTERNAL_IP="${external_ip}"
 K3S_CHANNEL="${k3s_channel}"
 K3S_VERSION="${k3s_version}"
-CERT_MANAGER_VERSION="${cert_manager_version}"
 
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-MANIFESTS_DIR=/var/lib/rancher/k3s/server/manifests
 
 log() { echo "[$(date -Is)] $*"; }
 
@@ -64,57 +64,25 @@ log "Attente du nœud Kubernetes"
 retry 300 k3s kubectl get nodes
 retry 300 k3s kubectl wait --for=condition=Ready node --all --timeout=10s
 
-# --- cert-manager (TLS Let's Encrypt automatique) -----------------------------
-if [[ -n "$CERT_MANAGER_VERSION" ]]; then
-  log "Déploiement de cert-manager $CERT_MANAGER_VERSION via le Helm controller k3s"
-  cat > "$MANIFESTS_DIR/cert-manager.yaml" <<EOF
-apiVersion: helm.cattle.io/v1
-kind: HelmChart
+# --- Variables du cluster pour Flux -------------------------------------------
+# Les Kustomizations Flux les injectent dans les manifests (postBuild.substituteFrom),
+# ex : host d'Ingress "whoami.$${INGRESS_BASE_DOMAIN}".
+log "Création de la ConfigMap flux-system/cluster-vars"
+cat > /etc/rancher/k3s/cluster-vars.yaml <<EOF
+apiVersion: v1
+kind: Namespace
 metadata:
-  name: cert-manager
-  namespace: kube-system
-spec:
-  repo: https://charts.jetstack.io
-  chart: cert-manager
-  version: "$CERT_MANAGER_VERSION"
-  targetNamespace: cert-manager
-  createNamespace: true
-  valuesContent: |-
-    crds:
-      enabled: true
-EOF
-
-  retry 600 k3s kubectl get crd clusterissuers.cert-manager.io
-  retry 600 k3s kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=10s
-
-  log "Création des ClusterIssuers Let's Encrypt (staging + prod)"
-  for env in staging prod; do
-    if [[ "$env" == "prod" ]]; then
-      server="https://acme-v02.api.letsencrypt.org/directory"
-    else
-      server="https://acme-staging-v02.api.letsencrypt.org/directory"
-    fi
-    issuer_file="/etc/rancher/k3s/letsencrypt-$env.yaml"
-    cat > "$issuer_file" <<EOF
-apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
+  name: flux-system
+---
+apiVersion: v1
+kind: ConfigMap
 metadata:
-  name: letsencrypt-$env
-spec:
-  acme:
-    server: $server
-%{ if acme_email != "" ~}
-    email: "${acme_email}"
-%{ endif ~}
-    privateKeySecretRef:
-      name: letsencrypt-$env-account-key
-    solvers:
-      - http01:
-          ingress:
-            ingressClassName: traefik
+  name: cluster-vars
+  namespace: flux-system
+data:
+  EXTERNAL_IP: "$EXTERNAL_IP"
+  INGRESS_BASE_DOMAIN: "$EXTERNAL_IP.sslip.io"
 EOF
-    retry 300 k3s kubectl apply -f "$issuer_file"
-  done
-fi
+retry 300 k3s kubectl apply -f /etc/rancher/k3s/cluster-vars.yaml
 
 log "=== Bootstrap terminé ==="

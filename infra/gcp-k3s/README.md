@@ -23,9 +23,11 @@ Le [startup script](templates/startup.sh.tftpl) (idempotent, rejoué à chaque b
 1. écrit `/etc/rancher/k3s/config.yaml` (`tls-san` et `node-external-ip` = IP publique) ;
 2. installe k3s via `get.k3s.io` (canal `stable` ou version pinnée) — Traefik et
    ServiceLB sont fournis par défaut et écoutent sur 80/443 du nœud ;
-3. déploie **cert-manager** via le Helm controller intégré à k3s (`HelmChart`) ;
-4. crée les `ClusterIssuer` `letsencrypt-staging` et `letsencrypt-prod`
-   (solveur HTTP-01 via Traefik).
+3. crée la ConfigMap `flux-system/cluster-vars` (`EXTERNAL_IP`,
+   `INGRESS_BASE_DOMAIN`) utilisée par Flux pour générer les hosts d'Ingress.
+
+Le reste (Flux, cert-manager, ClusterIssuers, applications) est déployé en
+GitOps depuis [`manifest/`](../../manifest/flux-system/README.md).
 
 Logs : `/var/log/k3s-bootstrap.log` (`make logs`).
 
@@ -41,14 +43,14 @@ Logs : `/var/log/k3s-bootstrap.log` (`make logs`).
 | `admin_source_ranges` | `[]` | IPs autorisées en direct sur 22/6443 |
 | `ingress_source_ranges` | `["0.0.0.0/0"]` | IPs autorisées sur 80/443 |
 | `k3s_channel` / `k3s_version` | `stable` / `""` | Version de k3s |
-| `cert_manager_version` | `v1.18.2` | Version cert-manager (`""` = pas de cert-manager) |
-| `acme_email` | `""` | Email de contact Let's Encrypt (optionnel) |
 
 Voir [`variables.tf`](variables.tf) pour la liste complète.
 
 ## Exposer une application
 
-Créer un `Ingress` de classe `traefik` sur un host résolvant vers l'IP publique :
+Créer (dans `manifest/applications/<app>/`) un `Ingress` de classe `traefik`
+sur un host résolvant vers l'IP publique ; `${INGRESS_BASE_DOMAIN}` est
+substitué par Flux (`postBuild.substituteFrom: cluster-vars`) :
 
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -60,10 +62,10 @@ metadata:
 spec:
   ingressClassName: traefik
   tls:
-    - hosts: [mon-app.<IP>.sslip.io]
+    - hosts: [mon-app.${INGRESS_BASE_DOMAIN}]
       secretName: mon-app-tls
   rules:
-    - host: mon-app.<IP>.sslip.io
+    - host: mon-app.${INGRESS_BASE_DOMAIN}
       http:
         paths:
           - path: /
@@ -75,15 +77,16 @@ spec:
                   number: 80
 ```
 
-`terraform output ingress_base_domain` donne le suffixe `<IP>.sslip.io`.
-Exemple complet : [`apps/demo-whoami`](../../apps/demo-whoami/manifest.yaml).
+`terraform output ingress_base_domain` donne la valeur (`<IP>.sslip.io`).
+Exemple complet : [`manifest/applications/demo-whoami`](../../manifest/applications/demo-whoami/).
 
 **Domaine personnalisé** : créer un enregistrement DNS wildcard
-`*.poc.example.com A <IP>` et utiliser ces hosts dans les Ingress.
+`*.poc.example.com A <IP>` et mettre ce domaine dans `INGRESS_BASE_DOMAIN`
+(startup script).
 
 > Let's Encrypt limite le nombre de certificats par domaine enregistré. En cas
-> d'erreur de rate limit sur sslip.io, utiliser `letsencrypt-staging`
-> (`make demo-staging`) ou un domaine personnalisé.
+> d'erreur de rate limit sur sslip.io, utiliser l'issuer `letsencrypt-staging`
+> ou un domaine personnalisé.
 
 ## State Terraform
 

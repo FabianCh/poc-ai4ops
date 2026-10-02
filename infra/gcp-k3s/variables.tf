@@ -90,18 +90,6 @@ variable "k3s_version" {
   default     = ""
 }
 
-variable "cert_manager_version" {
-  description = "Version du chart Helm cert-manager (vide = ne pas installer cert-manager)."
-  type        = string
-  default     = "v1.18.2"
-}
-
-variable "acme_email" {
-  description = "Email de contact Let's Encrypt (optionnel)."
-  type        = string
-  default     = ""
-}
-
 variable "labels" {
   description = "Labels appliqués aux ressources."
   type        = map(string)
