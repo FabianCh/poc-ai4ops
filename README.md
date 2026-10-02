@@ -26,6 +26,8 @@ POC d'**AIOps agentique** : un agent IA capable de détecter, diagnostiquer et
         │  │   ├─ ServiceLB ─► Traefik (Ingress Controller)        │  │
         │  │   ├─ FluxCD ◄── GitOps : manifest/ (branche main)     │  │
         │  │   ├─ cert-manager + ClusterIssuers Let's Encrypt      │  │
+        │  │   ├─ monitoring : Prometheus, Alertmanager, Grafana,  │  │
+        │  │   │              Loki + Alloy (logs et événements)    │  │
         │  │   └─ applications (ex : demo-whoami)                  │  │
         │  └───────────────────────────────────────────────────────┘  │
         │  VPC dédié · firewall 80/443 public · 22/6443 IAP/admin      │
@@ -47,7 +49,7 @@ certificat Let's Encrypt automatiquement.
 | --- | --- |
 | [`infra/gcp-k3s/`](infra/gcp-k3s/) | Terraform : réseau, firewall, IP statique, VM + bootstrap k3s |
 | [`manifest/flux-system/`](manifest/flux-system/) | Bootstrap FluxCD et Kustomizations Flux (`base/`, `applications/`) |
-| [`manifest/base/`](manifest/base/) | Socle : cert-manager, ClusterIssuers Let's Encrypt |
+| [`manifest/base/`](manifest/base/) | Socle : cert-manager, ClusterIssuers Let's Encrypt, observabilité (kube-prometheus-stack, Loki, Alloy) |
 | [`manifest/applications/`](manifest/applications/) | Applications (ex : `demo-whoami` exposée sur Internet) |
 | [`bin/`](bin/) | Kubeconfig, upgrade Flux, validation des manifests |
 | `Makefile` | Raccourcis (`make help`) |
@@ -105,7 +107,33 @@ make flux-status    # cert-manager → cluster-issuers → demo-whoami : Ready
 kubectl -n demo-whoami get pods,ingress,certificate
 ```
 
-### 5. Tester le GitOps
+### 5. Observabilité
+
+Namespace `monitoring`, déployé par Flux après cert-manager :
+
+| Composant | Rôle |
+| --- | --- |
+| Prometheus + Alertmanager (kube-prometheus-stack) | Métriques du cluster, règles d'alerte par défaut, rétention 7 jours |
+| Grafana | Dashboards Kubernetes, datasources Prometheus et Loki |
+| Loki | Stockage des logs, rétention 7 jours |
+| Alloy | Collecte des logs de tous les pods et des événements Kubernetes vers Loki |
+
+```bash
+terraform -chdir=infra/gcp-k3s output -raw grafana_url    # https://grafana.<IP>.sslip.io
+# Utilisateur : admin, mot de passe généré aléatoirement à l'installation :
+kubectl -n monitoring get secret kube-prometheus-stack-grafana \
+  -o jsonpath='{.data.admin-password}' | base64 -d; echo
+
+# Prometheus et Alertmanager ne sont pas exposés (pas d'authentification) :
+kubectl -n monitoring port-forward svc/kube-prometheus-stack-prometheus 9090    # http://localhost:9090
+kubectl -n monitoring port-forward svc/kube-prometheus-stack-alertmanager 9093  # http://localhost:9093
+```
+
+Dans Grafana > Explore > Loki :
+- `{namespace="demo-whoami"}` : logs de l'application de démo ;
+- `{job="kubernetes-events"}` : événements Kubernetes (BackOff, OOMKilled…).
+
+### 6. Tester le GitOps
 
 1. Passer `replicas: 2` à `3` dans
    `manifest/applications/demo-whoami/demo-whoami-deployment.yaml`.
@@ -113,7 +141,7 @@ kubectl -n demo-whoami get pods,ingress,certificate
 3. `make flux-reconcile` (ou attendre ~1 min), puis
    `kubectl -n demo-whoami get pods` : 3 pods.
 
-### 6. Nettoyer
+### 7. Nettoyer
 
 ```bash
 make destroy
@@ -125,6 +153,7 @@ make destroy
 | --- | --- |
 | Le bootstrap ne se termine pas | `make ssh` puis `sudo cat /var/log/k3s-bootstrap.log` |
 | Flux ne synchronise pas | `kubectl -n flux-system get gitrepository,kustomization` |
+| Stack monitoring absente | `flux get helmreleases -n monitoring` ; `kubectl -n monitoring get pods` |
 | Pas de certificat HTTPS | `kubectl -n demo-whoami describe certificate` ; en cas de rate limit Let's Encrypt sur sslip.io, passer l'annotation de l'Ingress à `letsencrypt-staging` |
 
 > **Coût** : la VM `e2-standard-4` tourne en continu. Pour réduire la
@@ -150,7 +179,7 @@ Détails : [`infra/gcp-k3s/README.md`](infra/gcp-k3s/README.md) (infra) et
 - [x] Initialisation du repo
 - [x] Plateforme : VM GCP + k3s + exposition Internet (Traefik, TLS Let's Encrypt)
 - [x] GitOps : déploiement via FluxCD (`manifest/`), installé automatiquement
-- [ ] Observabilité : Prometheus / Alertmanager, logs, événements Kubernetes
+- [x] Observabilité : Prometheus / Alertmanager / Grafana, Loki (logs + événements Kubernetes)
 - [ ] Applications cibles et scénarios d'incidents reproductibles (chaos)
 - [ ] Agent de diagnostic (LLM + outils K8s en lecture seule)
 - [ ] Remédiation automatique avec garde-fous (dry-run, approbation, audit)

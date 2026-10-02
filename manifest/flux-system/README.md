@@ -38,7 +38,13 @@ flowchart TD
     flux-system --> applications
     base --> cert-manager
     base --> cluster-issuers
+    base --> kube-prometheus-stack
+    base --> loki
+    base --> alloy
     cert-manager ---> |dependsOn| cluster-issuers
+    cluster-issuers ---> |dependsOn| kube-prometheus-stack
+    kube-prometheus-stack ---> |dependsOn| loki
+    loki ---> |dependsOn| alloy
     cluster-issuers ---> |dependsOn| demo-whoami
     applications --> demo-whoami
 ```

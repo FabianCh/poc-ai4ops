@@ -37,3 +37,8 @@ output "demo_url" {
   description = "URL de l'application de démo (déployée par Flux quelques minutes après le boot)."
   value       = "https://whoami.${google_compute_address.ingress.address}.sslip.io"
 }
+
+output "grafana_url" {
+  description = "URL de Grafana (utilisateur admin, mot de passe dans le secret monitoring/kube-prometheus-stack-grafana)."
+  value       = "https://grafana.${google_compute_address.ingress.address}.sslip.io"
+}

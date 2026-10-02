@@ -1,0 +1,19 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: loki
+  namespace: flux-system
+spec:
+  # Namespace monitoring et CRD ServiceMonitor fournis par kube-prometheus-stack
+  dependsOn:
+  - name: kube-prometheus-stack
+  interval: 10m0s
+  path: ./manifest/base/loki
+  prune: true
+  wait: true
+  timeout: 10m0s
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  targetNamespace: monitoring

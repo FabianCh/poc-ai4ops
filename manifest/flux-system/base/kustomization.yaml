@@ -3,3 +3,6 @@ kind: Kustomization
 resources:
 - cert-manager-ks.yaml
 - cluster-issuers-ks.yaml
+- kube-prometheus-stack-ks.yaml
+- loki-ks.yaml
+- alloy-ks.yaml

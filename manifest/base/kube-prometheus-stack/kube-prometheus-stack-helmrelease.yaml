@@ -1,0 +1,115 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kube-prometheus-stack
+  namespace: monitoring
+spec:
+  interval: 30m
+  timeout: 15m
+  chart:
+    spec:
+      chart: kube-prometheus-stack
+      version: 91.9.0
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+      interval: 12h
+  install:
+    crds: CreateReplace
+  upgrade:
+    crds: CreateReplace
+  values:
+    fullnameOverride: kube-prometheus-stack
+
+    # Composants du control plane embarqués dans le binaire k3s : pas de
+    # endpoints dédiés à scraper, ils généreraient des alertes en permanence.
+    kubeControllerManager:
+      enabled: false
+    kubeScheduler:
+      enabled: false
+    kubeProxy:
+      enabled: false
+    kubeEtcd:
+      enabled: false
+
+    prometheus:
+      prometheusSpec:
+        retention: 7d
+        retentionSize: 9GB
+        # Découvre tous les ServiceMonitors / PodMonitors / règles du cluster,
+        # pas seulement ceux portant le label de la release.
+        serviceMonitorSelectorNilUsesHelmValues: false
+        podMonitorSelectorNilUsesHelmValues: false
+        ruleSelectorNilUsesHelmValues: false
+        probeSelectorNilUsesHelmValues: false
+        scrapeConfigSelectorNilUsesHelmValues: false
+        resources:
+          requests:
+            cpu: 200m
+            memory: 1Gi
+          limits:
+            memory: 2Gi
+        storageSpec:
+          volumeClaimTemplate:
+            spec:
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 10Gi
+
+    alertmanager:
+      # Config par défaut (receiver "null") : le webhook de l'agent
+      # d'auto-remédiation sera branché ici plus tard.
+      alertmanagerSpec:
+        resources:
+          requests:
+            cpu: 10m
+            memory: 64Mi
+          limits:
+            memory: 128Mi
+        storage:
+          volumeClaimTemplate:
+            spec:
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 2Gi
+
+    grafana:
+      # Pas d'adminPassword : le chart génère un mot de passe aléatoire dans le
+      # secret kube-prometheus-stack-grafana (le repo est public).
+      adminUser: admin
+      ingress:
+        enabled: true
+        ingressClassName: traefik
+        annotations:
+          cert-manager.io/cluster-issuer: letsencrypt-prod
+        hosts:
+        - grafana.${INGRESS_BASE_DOMAIN}
+        tls:
+        - hosts:
+          - grafana.${INGRESS_BASE_DOMAIN}
+          secretName: grafana-tls
+      additionalDataSources:
+      - name: Loki
+        type: loki
+        uid: loki
+        access: proxy
+        url: http://loki.monitoring.svc:3100
+        jsonData:
+          maxLines: 1000
+      resources:
+        requests:
+          cpu: 50m
+          memory: 256Mi
+        limits:
+          memory: 512Mi
+
+    prometheusOperator:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          memory: 256Mi
