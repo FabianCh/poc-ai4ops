@@ -1,0 +1,21 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: demo-whoami
+  namespace: flux-system
+spec:
+  dependsOn:
+  - name: cluster-issuers
+  interval: 10m0s
+  path: ./manifest/applications/demo-whoami
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  targetNamespace: demo-whoami
+  # Variables du cluster (INGRESS_BASE_DOMAIN...) créées par le bootstrap de la VM
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-vars

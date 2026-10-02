@@ -27,3 +27,8 @@ kubeconfig*
 __pycache__/
 *.pyc
 .venv/
+
+# Clés (ne jamais committer : repo public)
+*.agekey
+flux-deploy-key*
+private.key

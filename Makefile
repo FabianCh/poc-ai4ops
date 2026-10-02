@@ -35,10 +35,10 @@ logs: ## Suit les logs du bootstrap k3s
 	eval "$$($(TF) output -raw bootstrap_logs_command)"
 
 kubeconfig: ## Récupère le kubeconfig (API sur l'IP publique)
-	scripts/get-kubeconfig.sh
+	bin/get-kubeconfig.sh
 
 kubeconfig-iap: ## Récupère le kubeconfig (API via tunnel IAP, cf. make tunnel)
-	scripts/get-kubeconfig.sh --iap
+	bin/get-kubeconfig.sh --iap
 
 tunnel: ## Ouvre un tunnel IAP vers l'API Kubernetes sur localhost:6443
 	gcloud compute start-iap-tunnel "$$($(TF) output -raw instance_name)" 6443 \
@@ -46,24 +46,23 @@ tunnel: ## Ouvre un tunnel IAP vers l'API Kubernetes sur localhost:6443
 	  --project "$$($(TF) output -raw project_id)" \
 	  --zone "$$($(TF) output -raw zone)"
 
-## --- Démo ---
-.PHONY: demo demo-staging demo-delete
-demo: ## Déploie l'app de démo exposée en HTTPS (Let's Encrypt prod)
-	scripts/deploy-demo.sh letsencrypt-prod
+## --- GitOps (FluxCD) ---
+.PHONY: flux-status flux-reconcile
+flux-status: ## État des Kustomizations et HelmReleases Flux
+	flux get kustomizations
+	flux get helmreleases -A
 
-demo-staging: ## Déploie l'app de démo (Let's Encrypt staging)
-	scripts/deploy-demo.sh letsencrypt-staging
-
-demo-delete: ## Supprime l'app de démo
-	kubectl delete namespace demo --ignore-not-found
+flux-reconcile: ## Force la synchronisation avec le repo
+	flux reconcile kustomization flux-system --with-source
 
 ## --- Qualité ---
 .PHONY: fmt lint
 fmt: ## Formate le code Terraform
 	terraform fmt -recursive infra
 
-lint: ## Vérifie format Terraform, validate et shellcheck
+lint: ## Vérifie Terraform, shellcheck et les manifests Kubernetes
 	terraform fmt -check -recursive infra
 	$(TF) init -backend=false -input=false >/dev/null
 	$(TF) validate
-	shellcheck scripts/*.sh
+	shellcheck bin/*.sh bin/fluxcd/*.sh
+	bin/validate-manifests.sh

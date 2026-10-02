@@ -1,0 +1,27 @@
+---
+# ${INGRESS_BASE_DOMAIN} est substitué par Flux (postBuild) depuis la ConfigMap
+# flux-system/cluster-vars créée par le bootstrap de la VM (<IP>.sslip.io).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: whoami
+  namespace: demo-whoami
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - whoami.${INGRESS_BASE_DOMAIN}
+    secretName: whoami-tls
+  rules:
+  - host: whoami.${INGRESS_BASE_DOMAIN}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: whoami
+            port:
+              name: http

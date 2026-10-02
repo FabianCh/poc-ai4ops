@@ -90,16 +90,22 @@ variable "k3s_version" {
   default     = ""
 }
 
-variable "cert_manager_version" {
-  description = "Version du chart Helm cert-manager (vide = ne pas installer cert-manager)."
+variable "flux_git_url" {
+  description = "Repo Git (public) synchronisé par Flux. Vide = ne pas installer Flux."
   type        = string
-  default     = "v1.18.2"
+  default     = "https://github.com/FabianCh/poc-ai4ops"
 }
 
-variable "acme_email" {
-  description = "Email de contact Let's Encrypt (optionnel)."
+variable "flux_branch" {
+  description = "Branche Git synchronisée par Flux."
   type        = string
-  default     = ""
+  default     = "main"
+}
+
+variable "flux_version" {
+  description = "Version de Flux installée au premier démarrage (même version que manifest/flux-system/gotk-components.yaml)."
+  type        = string
+  default     = "v2.9.5"
 }
 
 variable "labels" {

@@ -10,5 +10,3 @@ project_id = "mon-projet-gcp"
 # Votre IP publique pour joindre l'API Kubernetes / SSH sans IAP :
 #   curl -s https://ifconfig.me
 # admin_source_ranges = ["203.0.113.10/32"]
-
-# acme_email = "vous@example.com"
