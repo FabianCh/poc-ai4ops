@@ -10,7 +10,6 @@ locals {
 resource "google_project_service" "apis" {
   for_each = toset([
     "compute.googleapis.com",
-    "iam.googleapis.com",
     "iap.googleapis.com",
   ])
 
@@ -97,25 +96,4 @@ resource "google_compute_firewall" "admin" {
 
   source_ranges = var.admin_source_ranges
   target_tags   = [local.node_tag]
-}
-
-# ---------------------------------------------------------------------------
-# Identité de la VM
-# ---------------------------------------------------------------------------
-resource "google_service_account" "node" {
-  account_id   = substr("${var.name}-node", 0, 30)
-  display_name = "Nœud k3s ${var.name}"
-
-  depends_on = [google_project_service.apis]
-}
-
-resource "google_project_iam_member" "node" {
-  for_each = toset([
-    "roles/logging.logWriter",
-    "roles/monitoring.metricWriter",
-  ])
-
-  project = var.project_id
-  role    = each.value
-  member  = "serviceAccount:${google_service_account.node.email}"
 }

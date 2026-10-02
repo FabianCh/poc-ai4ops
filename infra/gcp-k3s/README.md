@@ -7,13 +7,12 @@ Provisionne sur Google Cloud une VM Compute Engine exécutant un cluster
 
 | Ressource | Rôle |
 | --- | --- |
-| APIs `compute`, `iam`, `iap` | Activées sur le projet (non désactivées au destroy) |
+| APIs `compute`, `iap` | Activées sur le projet (non désactivées au destroy) |
 | VPC `<name>-vpc` + sous-réseau | Réseau dédié (`10.10.0.0/24` par défaut) |
 | IP externe statique `<name>-ip` | Point d'entrée unique (apps + API Kubernetes) |
 | Firewall `allow-http-https` | 80/443 depuis `ingress_source_ranges` (Internet par défaut) |
 | Firewall `allow-iap` | 22/6443 depuis la plage IAP de Google (`35.235.240.0/20`) |
 | Firewall `allow-admin` | 22/6443 depuis `admin_source_ranges` (créée seulement si renseigné) |
-| Service account `<name>-node` | Identité de la VM (logs + métriques uniquement) |
 | VM `<name>` | Ubuntu 24.04, Shielded VM, OS Login, startup script k3s |
 
 ## Bootstrap de la VM
@@ -101,5 +100,5 @@ Après le premier `terraform init`, committer le fichier `.terraform.lock.hcl`.
 
 - API Kubernetes et SSH non exposés publiquement par défaut (IAP uniquement).
 - OS Login activé : l'accès SSH est piloté par IAM.
-- Service account de la VM limité à l'écriture de logs et métriques.
+- Aucun service account attaché à la VM : elle n'a aucun droit sur le projet GCP.
 - Kubeconfig admin en `0600` sur la VM, récupéré via SSH dans `.kube/` (ignoré par git).

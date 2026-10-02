@@ -37,10 +37,7 @@ resource "google_compute_instance" "k3s" {
     })
   }
 
-  service_account {
-    email  = google_service_account.node.email
-    scopes = ["cloud-platform"]
-  }
+  # Pas de service account : la VM n'appelle aucune API Google Cloud.
 
   shielded_instance_config {
     enable_secure_boot          = true
@@ -55,6 +52,4 @@ resource "google_compute_instance" "k3s" {
     on_host_maintenance         = var.spot ? "TERMINATE" : "MIGRATE"
     instance_termination_action = var.spot ? "STOP" : null
   }
-
-  depends_on = [google_project_iam_member.node]
 }
