@@ -7,3 +7,5 @@ resources:
 - otel-demo-helmrepository.yaml
 - otel-demo-helmrelease.yaml
 - otel-demo-ingress.yaml
+- otel-demo-grafana-ingress.yaml
+- otel-demo-middleware.yaml

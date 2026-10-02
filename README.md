@@ -157,6 +157,12 @@ terraform -chdir=infra/gcp-k3s output -raw otel_demo_url    # https://otel-demo.
 | `/feature` | Feature flags flagd : injection de pannes |
 | `/jaeger/ui` | Traces |
 | `/loadgen` | Générateur de charge Locust |
+| `/grafana` | Redirection vers le Grafana du cluster (`grafana.<IP>.sslip.io`) |
+
+Les dashboards de la démo (Demo, APM, Spanmetrics, Exemplars, OpenTelemetry
+Collector…) sont importés dans le Grafana du cluster, dossier
+**OpenTelemetry Demo**. Les panneaux de logs de ces dashboards restent vides :
+ils interrogent OpenSearch, remplacé ici par Loki (utiliser Explore > Loki).
 
 Exemples de pannes activables dans `/feature` : `productCatalogFailure`,
 `cartFailure`, `paymentFailure`, `adHighCpu`, `adManualGc`,

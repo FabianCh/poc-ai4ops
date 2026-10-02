@@ -1,0 +1,12 @@
+---
+# Redirige /grafana de la démo vers le Grafana de la stack monitoring
+# ($${1} : échappement Flux, devient ${1} pour Traefik).
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: grafana-redirect
+  namespace: otel-demo
+spec:
+  redirectRegex:
+    regex: ^https?://[^/]+/grafana/?(.*)
+    replacement: https://grafana.${INGRESS_BASE_DOMAIN}/$${1}

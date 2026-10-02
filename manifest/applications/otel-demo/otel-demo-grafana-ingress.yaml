@@ -1,0 +1,27 @@
+---
+# /grafana : redirection vers https://grafana.${INGRESS_BASE_DOMAIN} (le Grafana
+# de la démo est désactivé). Le certificat est géré par l'Ingress otel-demo.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: otel-demo-grafana
+  namespace: otel-demo
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: otel-demo-grafana-redirect@kubernetescrd
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - otel-demo.${INGRESS_BASE_DOMAIN}
+    secretName: otel-demo-tls
+  rules:
+  - host: otel-demo.${INGRESS_BASE_DOMAIN}
+    http:
+      paths:
+      - path: /grafana
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-proxy
+            port:
+              number: 8080
