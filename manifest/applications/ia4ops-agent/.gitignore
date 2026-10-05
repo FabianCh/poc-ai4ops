@@ -1,0 +1,47 @@
+# Environnement virtuel
+.venv/
+
+# Variables d'environnement (ne jamais committer)
+.env
+.env.local
+.env.*.local
+
+# Credentials GCP — ne jamais committer des fichiers JSON de service account
+*-service-account.json
+service-account*.json
+credentials*.json
+*-credentials.json
+gcp-key*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Tests et coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Audit trail local (données de runtime, pas du code)
+audit_logs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
