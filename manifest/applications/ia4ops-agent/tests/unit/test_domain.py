@@ -10,13 +10,12 @@ Couvre :
 """
 
 import json
-from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
 
 from ia4ops_agent.audit.models import AuditEvent
-from ia4ops_agent.domain.alerts import AlertItem, AlertLabels, AlertmanagerWebhook
+from ia4ops_agent.domain.alerts import AlertItem, AlertmanagerWebhook
 from ia4ops_agent.domain.context import (
     IncidentContext,
     IncidentInfo,

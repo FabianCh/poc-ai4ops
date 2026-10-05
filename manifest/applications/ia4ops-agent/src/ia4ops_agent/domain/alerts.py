@@ -69,7 +69,7 @@ class AlertmanagerWebhook(BaseModel):
     alerts: list[AlertItem]
 
     @model_validator(mode="after")
-    def alerts_not_empty(self) -> "AlertmanagerWebhook":
+    def alerts_not_empty(self) -> AlertmanagerWebhook:
         if not self.alerts:
             raise ValueError("Le webhook doit contenir au moins une alerte.")
         return self

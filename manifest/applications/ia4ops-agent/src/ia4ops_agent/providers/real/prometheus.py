@@ -7,8 +7,6 @@ Auth     : Basic auth admin:<password> via GRAFANA_USER / GRAFANA_PASSWORD
 
 from typing import Any
 
-from ia4ops_agent.providers.interfaces import MetricsUnavailableError
-
 
 class PrometheusProvider:
     """Implémentation réelle de MetricsProvider via le proxy Grafana → Prometheus."""

@@ -7,11 +7,13 @@
 .env.*.local
 
 # Credentials GCP — ne jamais committer des fichiers JSON de service account
+credentials/
 *-service-account.json
 service-account*.json
 credentials*.json
 *-credentials.json
 gcp-key*.json
+*.json.key
 
 # Python
 __pycache__/

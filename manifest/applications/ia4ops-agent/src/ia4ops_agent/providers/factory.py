@@ -27,7 +27,7 @@ def _get_provider_mode() -> str:
     return os.environ.get("LLM_PROVIDER", "mock").lower().strip()
 
 
-def get_metrics_provider() -> "MetricsProvider":
+def get_metrics_provider() -> MetricsProvider:
     """Retourne le MetricsProvider approprié selon LLM_PROVIDER."""
     mode = _get_provider_mode()
     if mode == "mock":
@@ -39,7 +39,7 @@ def get_metrics_provider() -> "MetricsProvider":
     return PrometheusProvider()
 
 
-def get_logs_provider() -> "LogsProvider":
+def get_logs_provider() -> LogsProvider:
     """Retourne le LogsProvider approprié selon LLM_PROVIDER."""
     mode = _get_provider_mode()
     if mode == "mock":
@@ -50,7 +50,7 @@ def get_logs_provider() -> "LogsProvider":
     return LokiProvider()
 
 
-def get_cluster_provider() -> "ClusterProvider":
+def get_cluster_provider() -> ClusterProvider:
     """Retourne le ClusterProvider approprié selon LLM_PROVIDER."""
     mode = _get_provider_mode()
     if mode == "mock":
@@ -69,21 +69,21 @@ class Providers:
 
     def __init__(
         self,
-        metrics: "MetricsProvider | None" = None,
-        logs: "LogsProvider | None" = None,
-        cluster: "ClusterProvider | None" = None,
+        metrics: MetricsProvider | None = None,
+        logs: LogsProvider | None = None,
+        cluster: ClusterProvider | None = None,
     ) -> None:
         self.metrics = metrics or get_metrics_provider()
         self.logs = logs or get_logs_provider()
         self.cluster = cluster or get_cluster_provider()
 
     @classmethod
-    def from_env(cls) -> "Providers":
+    def from_env(cls) -> Providers:
         """Crée les providers depuis la configuration d'environnement."""
         return cls()
 
     @classmethod
-    def mock(cls) -> "Providers":
+    def mock(cls) -> Providers:
         """Crée systématiquement des providers mockés (utile dans les tests)."""
         from ia4ops_agent.providers.mock.cluster import MockClusterProvider
         from ia4ops_agent.providers.mock.logs import MockLogsProvider

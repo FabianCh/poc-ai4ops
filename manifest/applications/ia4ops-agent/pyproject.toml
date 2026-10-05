@@ -13,6 +13,7 @@ dependencies = [
     "pydantic>=2.9.0",
     "pydantic-settings>=2.5.0",
     "python-dotenv>=1.0.0",
+    "langchain-google-genai>=4.4.0",
 ]
 
 [project.optional-dependencies]
@@ -41,5 +42,5 @@ ignore = []
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "--tb=short"
-# exit code 5 (no tests) accepté — les tests s'ajouteront task par task
+addopts = "--tb=short --ignore=tests/live"
+# tests/live/ est opt-in : uv run pytest tests/live/ -v -s

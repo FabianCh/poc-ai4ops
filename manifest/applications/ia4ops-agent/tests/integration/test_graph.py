@@ -13,7 +13,6 @@ On vérifie :
 """
 
 import json
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +22,6 @@ from ia4ops_agent.domain.diagnosis import DiagnosticOutput
 from ia4ops_agent.graph.builder import build_graph
 from ia4ops_agent.providers.factory import Providers
 
-
 # ---------------------------------------------------------------------------
 # Payloads de test (identiques aux fixtures JSON)
 # ---------------------------------------------------------------------------
@@ -31,7 +29,7 @@ from ia4ops_agent.providers.factory import Providers
 def _alert_payload(service_name: str, fingerprint: str) -> dict[str, Any]:
     return {
         "version": "4",
-        "groupKey": f"{{/}}{{namespace='otel-demo'}}:{{alertname='OtelDemoServiceHighErrorRate'}}",
+        "groupKey": "{/}{namespace='otel-demo'}:{alertname='OtelDemoServiceHighErrorRate'}",
         "truncatedAlerts": 0,
         "status": "firing",
         "receiver": "ai4ops-agent",

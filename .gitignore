@@ -28,7 +28,15 @@ __pycache__/
 *.pyc
 .venv/
 
-# Clés (ne jamais committer : repo public)
+# Clés et credentials (ne jamais committer : repo public)
+credentials/
 *.agekey
 flux-deploy-key*
 private.key
+*.json.key
+*-service-account.json
+service-account*.json
+*credentials*.json
+
+#Kiro
+.kiroignore

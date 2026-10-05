@@ -74,7 +74,7 @@ class DiagnosticOutput(BaseModel):
     action_executed: bool = False
 
     @model_validator(mode="after")
-    def action_executed_must_be_false(self) -> "DiagnosticOutput":
+    def action_executed_must_be_false(self) -> DiagnosticOutput:
         """Invariant de sécurité : aucune action ne peut être marquée exécutée."""
         if self.action_executed is not False:
             raise ValueError(
@@ -83,7 +83,7 @@ class DiagnosticOutput(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def evidence_refs_must_exist(self) -> "DiagnosticOutput":
+    def evidence_refs_must_exist(self) -> DiagnosticOutput:
         """Chaque evidence_ref doit pointer vers une Evidence présente."""
         known_refs = {e.reference for e in self.evidence}
         all_refs = list(self.primary_hypothesis.evidence_refs)

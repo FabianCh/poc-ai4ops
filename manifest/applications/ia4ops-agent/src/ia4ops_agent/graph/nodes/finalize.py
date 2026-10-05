@@ -9,7 +9,6 @@ Le rapport est la sortie publique de l'incident :
 
 import time
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from ia4ops_agent.audit.models import AuditEvent

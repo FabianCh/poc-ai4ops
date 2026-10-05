@@ -9,7 +9,6 @@ Couvre :
 - Conformité Protocol (isinstance checks runtime_checkable)
 """
 
-import os
 
 import pytest
 
@@ -23,7 +22,6 @@ from ia4ops_agent.providers.interfaces import (
 from ia4ops_agent.providers.mock.cluster import MockClusterProvider
 from ia4ops_agent.providers.mock.logs import MockLogsProvider
 from ia4ops_agent.providers.mock.metrics import MockMetricsProvider
-
 
 # ---------------------------------------------------------------------------
 # Tests MockMetricsProvider
