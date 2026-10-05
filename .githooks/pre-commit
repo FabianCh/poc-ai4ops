@@ -1,0 +1,51 @@
+#!/bin/sh
+# pre-commit hook - protection contre les commits de secrets
+# Bloque si des fichiers sensibles sont staged.
+
+ERRORS=0
+
+# --- 1. Fichiers .env non-example ---
+ENV_FILES=$(git diff --cached --name-only | grep -E '(^|/)\.env$|(^|/)\.env\.' | grep -v '\.example')
+
+if [ -n "$ENV_FILES" ]; then
+    echo "[SECRETS] Fichier(s) .env detecte(s) dans le commit :"
+    echo "$ENV_FILES" | sed 's/^/  /'
+    echo "  -> Ces fichiers peuvent contenir des secrets. Retirez-les avec :"
+    echo "     git reset HEAD <fichier>"
+    ERRORS=1
+fi
+
+# --- 2. Fichiers de credentials JSON GCP ---
+CRED_FILES=$(git diff --cached --name-only | grep -iE '(service.?account|credentials?|gcp.?key).*\.json')
+
+if [ -n "$CRED_FILES" ]; then
+    echo "[SECRETS] Fichier(s) de credentials JSON detecte(s) :"
+    echo "$CRED_FILES" | sed 's/^/  /'
+    echo "  -> Ne jamais commiter un service account GCP. Retirez-le avec :"
+    echo "     git reset HEAD <fichier>"
+    ERRORS=1
+fi
+
+# --- 3. Cles privees PEM dans le contenu stage ---
+# On exclut les fichiers du dossier .githooks/ pour eviter que le hook
+# ne se detecte lui-meme (faux positif sur les patterns de detection).
+STAGED_FILES=$(git diff --cached --name-only | grep -v '^\.githooks/')
+PEM_FOUND=0
+for f in $STAGED_FILES; do
+    if git show ":$f" 2>/dev/null | grep -q "BEGIN.*PRIVATE KEY"; then
+        PEM_FOUND=1
+        echo "[SECRETS] Cle privee PEM detectee dans : $f"
+    fi
+done
+if [ $PEM_FOUND -ne 0 ]; then
+    ERRORS=1
+fi
+
+# --- Resultat ---
+if [ $ERRORS -ne 0 ]; then
+    echo ""
+    echo "Commit bloque - retirez les fichiers sensibles et reessayez."
+    exit 1
+fi
+
+exit 0
