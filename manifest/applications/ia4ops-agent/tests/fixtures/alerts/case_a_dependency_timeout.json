@@ -1,0 +1,35 @@
+{
+  "version": "4",
+  "groupKey": "{}/{namespace=\"otel-demo\"}:{alertname=\"OtelDemoServiceHighErrorRate\"}",
+  "truncatedAlerts": 0,
+  "status": "firing",
+  "receiver": "ai4ops-agent",
+  "groupLabels": { "namespace": "otel-demo" },
+  "commonLabels": {
+    "namespace": "otel-demo",
+    "alertname": "OtelDemoServiceHighErrorRate"
+  },
+  "commonAnnotations": {},
+  "externalURL": "http://alertmanager:9093",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "OtelDemoServiceHighErrorRate",
+        "namespace": "otel-demo",
+        "severity": "critical",
+        "service_name": "product-catalog"
+      },
+      "annotations": {
+        "summary": "High error rate on product-catalog",
+        "description": "Error rate exceeded 5% threshold for 2 minutes."
+      },
+      "startsAt": "2026-10-02T18:41:26Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://prometheus/graph?g0.expr=error_rate",
+      "fingerprint": "case-a-fp-001"
+    }
+  ],
+  "_mock_scenario": "case_a",
+  "_description": "Cas A : taux d'erreur élevé + latence haute + logs répétant un timeout vers une dépendance. Workload Kubernetes stable. Diagnostic attendu : dépendance aval dégradée."
+}
