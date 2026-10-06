@@ -28,7 +28,8 @@ POC d'**AIOps agentique** : un agent IA capable de détecter, diagnostiquer et
         │  │   ├─ cert-manager + ClusterIssuers Let's Encrypt      │  │
         │  │   ├─ monitoring : Prometheus, Alertmanager, Grafana,  │  │
         │  │   │              Loki + Alloy (logs et événements)    │  │
-        │  │   └─ applications : demo-whoami, OpenTelemetry Demo   │  │
+        │  │   └─ applications : demo-whoami, OpenTelemetry Demo,  │  │
+        │  │                    ia4ops-agent, Keep (alertes)       │  │
         │  └───────────────────────────────────────────────────────┘  │
         │  VPC dédié · firewall 80/443 public · 22/6443 IAP/admin      │
         └──────────────────────────────────────────────────────────────┘
@@ -50,7 +51,7 @@ certificat Let's Encrypt automatiquement.
 | [`infra/gcp-k3s/`](infra/gcp-k3s/) | Terraform : réseau, firewall, IP statique, VM + bootstrap k3s |
 | [`manifest/flux-system/`](manifest/flux-system/) | Bootstrap FluxCD et Kustomizations Flux (`base/`, `applications/`) |
 | [`manifest/base/`](manifest/base/) | Socle : cert-manager, ClusterIssuers Let's Encrypt, observabilité (kube-prometheus-stack, Loki, Alloy) |
-| [`manifest/applications/`](manifest/applications/) | Applications : `demo-whoami`, `otel-demo` (OpenTelemetry Demo), `ia4ops-agent` (agent IA, webhook Alertmanager) |
+| [`manifest/applications/`](manifest/applications/) | Applications : `demo-whoami`, `otel-demo` (OpenTelemetry Demo), `ia4ops-agent` (agent IA, webhook Alertmanager), `keep` (console d'alertes) |
 | [`ia4ops-agent/`](ia4ops-agent/) | Agent IA de diagnostic (FastAPI + LangGraph), image `ghcr.io/fabianch/poc-ai4ops/ia4ops-agent` |
 | [`bin/`](bin/) | Kubeconfig, upgrade Flux, validation des manifests |
 | [`docs/`](docs/) | Endpoints, accès depuis Cloud Shell, coûts |
@@ -183,6 +184,13 @@ serviront de scénarios d'incidents pour l'agent.
 > L'URL est publique : n'importe qui la connaissant peut activer une panne.
 
 #### Alertes
+
+Alertmanager envoie toutes les alertes à **Keep** (console d'alertes open source :
+historique, déduplication, statut firing/resolved) et, pour `otel-demo`, à l'agent
+`ia4ops-agent`. Keep est publié sur `https://keep.<IP>.sslip.io` (login `admin`) ; ses
+secrets ne sont pas dans Git : après le premier déploiement Flux, lancer **une fois**
+`make keep-secrets` (génère le mot de passe admin et la clé d'API d'Alertmanager,
+voir [docs/cloudshell.md](docs/cloudshell.md#keep-console-dalertes)).
 
 Des alertes Prometheus (`manifest/applications/otel-demo/otel-demo-prometheusrule.yaml`)
 couvrent les pannes injectables. Elles sont routées par Alertmanager et

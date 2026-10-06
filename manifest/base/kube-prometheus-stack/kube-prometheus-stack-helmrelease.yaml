@@ -80,10 +80,11 @@ spec:
                   storage: 10Gi
 
     alertmanager:
-      # Routage : les alertes du namespace otel-demo sont envoyées à l'agent ia4ops-agent
-      # (webhook Alertmanager v4), le reste au receiver "null". route et receivers
-      # remplacent ceux du chart (les listes Helm ne fusionnent pas) ; inhibit_rules
-      # et global restent ceux par défaut.
+      # Routage : toutes les alertes (sauf Watchdog) sont envoyées à Keep (console d'alertes,
+      # namespace keep) puis, pour le namespace otel-demo, à l'agent ia4ops-agent (webhook
+      # Alertmanager v4) ; le reste va au receiver "null". route et receivers remplacent ceux
+      # du chart (les listes Helm ne fusionnent pas) ; inhibit_rules et global restent ceux
+      # par défaut.
       config:
         route:
           group_by: [namespace]
@@ -95,6 +96,16 @@ spec:
           - receiver: "null"
             matchers:
             - alertname = "Watchdog"
+          # continue: l'alerte est aussi évaluée par la route suivante (agent). Keep déduplique
+          # lui-même par fingerprint : group_by large et group_interval court (résolution rapide).
+          - receiver: keep
+            matchers:
+            - alertname != "Watchdog"
+            group_by: [namespace, alertname]
+            group_wait: 10s
+            group_interval: 1m
+            repeat_interval: 4h
+            continue: true
           - receiver: ia4ops-agent
             matchers:
             - namespace = "otel-demo"
@@ -106,7 +117,28 @@ spec:
           webhook_configs:
           - url: http://ia4ops-agent.ia4ops.svc:8000/webhooks/alertmanager
             send_resolved: true
+        # Clé d'API (rôle webhook) lue dans un fichier : Secret keep-alertmanager-api-key créé
+        # par `make keep-secrets`, jamais dans Git.
+        - name: keep
+          webhook_configs:
+          - url: http://keep-backend.keep.svc:8080/alerts/event/prometheus
+            send_resolved: true
+            http_config:
+              basic_auth:
+                username: api_key
+                password_file: /etc/alertmanager/keep-api-key/api-key
       alertmanagerSpec:
+        # Volume optionnel : sans le Secret, Alertmanager démarre quand même (les envois vers
+        # Keep échouent, ceux vers l'agent continuent).
+        volumes:
+        - name: keep-api-key
+          secret:
+            secretName: keep-alertmanager-api-key
+            optional: true
+        volumeMounts:
+        - name: keep-api-key
+          mountPath: /etc/alertmanager/keep-api-key
+          readOnly: true
         resources:
           requests:
             cpu: 10m

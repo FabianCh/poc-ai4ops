@@ -55,6 +55,11 @@ flux-status: ## État des Kustomizations et HelmReleases Flux
 flux-reconcile: ## Force la synchronisation avec le repo
 	flux reconcile kustomization flux-system --with-source
 
+## --- Secrets (hors Git) ---
+.PHONY: keep-secrets
+keep-secrets: ## Crée les Secrets de Keep et la clé d'API d'Alertmanager (idempotent)
+	bin/create-keep-secrets.sh
+
 ## --- Qualité ---
 .PHONY: fmt lint
 fmt: ## Formate le code Terraform

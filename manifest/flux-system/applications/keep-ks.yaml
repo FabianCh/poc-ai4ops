@@ -1,0 +1,22 @@
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: keep
+  namespace: flux-system
+spec:
+  # Certificats (ClusterIssuers) et Alertmanager (qui lui envoie les alertes)
+  dependsOn:
+  - name: cluster-issuers
+  - name: kube-prometheus-stack
+  interval: 10m0s
+  path: ./manifest/applications/keep
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  targetNamespace: keep
+  postBuild:
+    substituteFrom:
+    - kind: ConfigMap
+      name: cluster-vars

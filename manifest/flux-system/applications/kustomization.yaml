@@ -5,3 +5,4 @@ resources:
 - demo-whoami-ks.yaml
 - otel-demo-ks.yaml
 - ia4ops-agent-ks.yaml
+- keep-ks.yaml

@@ -46,6 +46,29 @@ gcloud compute ssh "$NAME" --zone "$ZONE" --tunnel-through-iap --command \
 > Si le mot de passe a été changé depuis l'UI Grafana, le secret n'est plus à jour : c'est alors
 > le nouveau mot de passe qui fait foi.
 
+### Keep (console d'alertes)
+
+Les secrets de Keep ne sont pas dans Git. Une fois Flux synchronisé (`kubectl get helmrelease -n keep`),
+créer les Secrets (mot de passe admin, clé JWT, clé d'API d'Alertmanager) avec `kubectl` configuré
+([plus bas](#kubeconfig-accès-kubectl-depuis-cloud-shell)) :
+
+```bash
+make keep-secrets        # idempotent : affiche le mot de passe admin à la première création seulement
+```
+
+Sans `make` (Cloud Shell sans le dépôt cloné), cloner le dépôt puis lancer `bin/create-keep-secrets.sh`.
+Relire le mot de passe ensuite :
+
+```bash
+kubectl -n keep get secret keep-backend-auth -o jsonpath='{.data.KEEP_DEFAULT_PASSWORD}' | base64 -d; echo
+```
+
+Tant que les Secrets n'existent pas, les pods `keep-backend` et `keep-frontend` restent en
+`CreateContainerConfigError` (Keep ne démarre jamais sans authentification) et les envois
+d'Alertmanager vers Keep échouent, sans affecter ceux vers l'agent. Les valeurs de l'utilisateur
+(`admin`) et de la clé d'API (`alertmanager`, rôle `webhook`) sont figées dans la base de Keep au
+premier démarrage : pour les changer, supprimer le PVC `keep-pvc` (perte de l'historique).
+
 ### Kubeconfig (accès `kubectl` depuis Cloud Shell)
 
 Le kubeconfig admin de k3s pointe sur `https://127.0.0.1:6443` : il fonctionne tel quel à

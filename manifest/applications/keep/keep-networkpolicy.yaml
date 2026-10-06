@@ -1,0 +1,81 @@
+---
+# Entrées autorisées dans le namespace keep :
+#   - Traefik (kube-system) : interface, API (/v2) et websocket publiés par l'Ingress ;
+#   - Alertmanager (monitoring) : webhook d'alertes vers le backend (8080) ;
+#   - les pods de Keep entre eux (front -> back, back -> base, back -> websocket).
+# Tout le reste est refusé (base MySQL sans mot de passe incluse). kubectl port-forward
+# n'est pas soumis aux NetworkPolicies.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: keep
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-keep-internal
+  namespace: keep
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector: {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-traefik
+  namespace: keep
+spec:
+  podSelector:
+    matchExpressions:
+    - key: keep-component
+      operator: In
+      values: [frontend, backend, websocket]
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: traefik
+    ports:
+    - protocol: TCP
+      port: 3000
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 6001
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-alertmanager-webhook
+  namespace: keep
+spec:
+  podSelector:
+    matchLabels:
+      keep-component: backend
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: alertmanager
+    ports:
+    - protocol: TCP
+      port: 8080

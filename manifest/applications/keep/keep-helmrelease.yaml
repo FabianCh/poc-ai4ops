@@ -1,0 +1,111 @@
+---
+# Keep (keephq.dev, MIT) : console d'alertes (agrégation, déduplication, historique,
+# workflows). Reçoit les alertes d'Alertmanager (receiver "keep", voir
+# manifest/base/kube-prometheus-stack). Authentification "DB" (login/mot de passe) :
+# les secrets ne sont PAS dans Git, ils sont créés par `make keep-secrets` :
+#   keep-backend-auth   KEEP_JWT_SECRET, KEEP_DEFAULT_PASSWORD, KEEP_DEFAULT_API_KEYS
+#   keep-frontend-auth  NEXTAUTH_SECRET
+# Sans ces Secrets, les pods restent en attente (CreateContainerConfigError) : Keep ne
+# démarre jamais sans authentification.
+# L'Ingress est dans keep-ingress.yaml (celui du chart ne gère pas TLS / cert-manager).
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: keep
+  namespace: keep
+spec:
+  interval: 30m
+  timeout: 10m
+  chart:
+    spec:
+      chart: keep
+      version: 0.1.97
+      sourceRef:
+        kind: HelmRepository
+        name: keep
+      interval: 12h
+  values:
+    # URL publique : le chart en déduit NEXTAUTH_URL (https) et API_URL_CLIENT (/v2).
+    # className "none" : aucun des Ingress du chart (nginx/haproxy/traefik) n'est rendu.
+    global:
+      ingress:
+        enabled: true
+        className: none
+        hosts:
+        - host: keep.${INGRESS_BASE_DOMAIN}
+        tls:
+        - hosts:
+          - keep.${INGRESS_BASE_DOMAIN}
+          secretName: keep-tls
+
+    backend:
+      image:
+        pullPolicy: IfNotPresent
+      envRender:
+        AUTH_TYPE: DB
+        KEEP_DEFAULT_USERNAME: admin
+      envFromSecrets:
+      - name: keep-backend-auth
+      resources:
+        requests:
+          cpu: 100m
+          memory: 384Mi
+        limits:
+          memory: 1Gi
+
+    frontend:
+      image:
+        pullPolicy: IfNotPresent
+      # NEXTAUTH_SECRET retiré de la liste par défaut du chart (valeur "secret") :
+      # il vient du Secret keep-frontend-auth.
+      env:
+      - name: VERCEL
+        value: "1"
+      - name: ENV
+        value: production
+      - name: NODE_ENV
+        value: production
+      - name: HOSTNAME
+        value: 0.0.0.0
+      - name: PUSHER_APP_KEY
+        value: keepappkey
+      - name: FRIGADE_DISABLED
+        value: "true"
+      envRender:
+        AUTH_TYPE: DB
+      envFromSecrets:
+      - name: keep-frontend-auth
+      resources:
+        requests:
+          cpu: 50m
+          memory: 192Mi
+        limits:
+          memory: 512Mi
+
+    websocket:
+      image:
+        pullPolicy: IfNotPresent
+      resources:
+        requests:
+          cpu: 20m
+          memory: 64Mi
+        limits:
+          memory: 256Mi
+
+    database:
+      # PVC dynamique local-path (pas de PV hostPath statique du chart)
+      pv:
+        enabled: false
+      pvc:
+        size: 2Gi
+        storageClass: local-path
+      mysql:
+        image:
+          repository: mysql
+          tag: "8.4"
+      resources:
+        requests:
+          cpu: 100m
+          memory: 384Mi
+        limits:
+          memory: 768Mi

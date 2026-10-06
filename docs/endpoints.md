@@ -10,6 +10,7 @@ automatiquement vers cette IP ; tous les endpoints publics sont en HTTPS (certif
 | --- | --- | --- |
 | `https://whoami.<IP>.sslip.io` | Application de démo `demo-whoami` (renvoie les infos de la requête) | Aucune |
 | `https://grafana.<IP>.sslip.io` | Grafana : dashboards, Explore (Prometheus, Loki, Jaeger), Alerting | `admin` + mot de passe généré ([récupération](cloudshell.md#mot-de-passe-grafana)) |
+| `https://keep.<IP>.sslip.io` | Keep : console d'alertes (historique, déduplication, firing/resolved) | `admin` + mot de passe généré par `make keep-secrets` ([récupération](cloudshell.md#keep-console-dalertes)) |
 | `https://otel-demo.<IP>.sslip.io/` | OpenTelemetry Demo : boutique Astronomy Shop | Aucune |
 | `https://otel-demo.<IP>.sslip.io/feature` | UI des feature flags flagd : **injection de pannes** | Aucune |
 | `https://otel-demo.<IP>.sslip.io/jaeger/ui` | Jaeger : traces de la démo | Aucune |
@@ -66,10 +67,15 @@ kubeconfig, ou depuis Cloud Shell avec l'aperçu web, voir [cloudshell.md](cloud
 | OTel Collector | `otel-demo/otel-collector` | 4317 (gRPC), 4318 (HTTP) | `kubectl -n otel-demo port-forward svc/otel-collector 4317 4318` |
 | flagd | `otel-demo/flagd` | 8013 (gRPC), 8016 (OFREP) | `kubectl -n otel-demo port-forward svc/flagd 8013 8016` |
 | Agent ia4ops (`/api/v1/incidents/{id}`, `/docs`) | `ia4ops/ia4ops-agent` | 8000 | `kubectl -n ia4ops port-forward svc/ia4ops-agent 8000` |
+| Keep backend (API, webhook Alertmanager `/alerts/event/prometheus`) | `keep/keep-backend` | 8080 | `kubectl -n keep port-forward svc/keep-backend 8080` |
 
 L'agent `ia4ops-agent` n'accepte en entrée que les webhooks d'Alertmanager : une NetworkPolicy
 refuse tout autre trafic vers le namespace `ia4ops`, sauf depuis les pods Alertmanager du
 namespace `monitoring` (port 8000). `kubectl port-forward` n'est pas soumis aux NetworkPolicies.
+
+Le backend de Keep n'accepte les webhooks d'Alertmanager qu'avec une clé d'API (rôle `webhook`) et une
+NetworkPolicy limite ses entrées à Traefik (interface publique), aux pods Alertmanager du namespace
+`monitoring` et aux pods de Keep.
 
 ## Outputs Terraform
 

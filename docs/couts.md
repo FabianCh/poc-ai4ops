@@ -17,6 +17,9 @@ Ressources créées par `infra/gcp-k3s` avec les valeurs par défaut :
 | IP externe statique **réservée non utilisée** (VM arrêtée) | ~0,01 $/h, soit ~7,30 $/mois | la VM est arrêtée |
 | Trafic sortant Internet (navigation Grafana / boutique) | ~0,12 $/Gio | à l'usage, négligeable pour le POC (< 1 $/mois) |
 
+Keep (4 pods : backend, frontend, websocket, MySQL) ajoute environ 1,5 Go de RAM demandée et un
+PVC de 2 Go (~0,20 $/mois) : à surveiller si des pods passent `Pending` (voir la note sur `e2-standard-8`).
+
 Gratuit : IAP (SSH, tunnels), Cloud Shell, VPC et règles firewall, sslip.io, certificats Let's
 Encrypt, repo GitHub public. La VM n'a pas de service account : pas de Cloud Logging/Monitoring
 facturé. Les machines E2 ne bénéficient pas des remises automatiques d'utilisation prolongée.
