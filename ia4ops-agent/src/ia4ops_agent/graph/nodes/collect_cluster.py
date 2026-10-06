@@ -8,6 +8,7 @@ import time
 from typing import Any
 
 from ia4ops_agent.audit.models import AuditEvent
+from ia4ops_agent.audit.trace_logging import emit_trace_event
 from ia4ops_agent.graph.state import IncidentState
 from ia4ops_agent.providers.interfaces import ClusterProvider, ClusterUnavailableError
 
@@ -59,6 +60,15 @@ def make_collect_cluster_node(provider: ClusterProvider):
             duration_ms=duration_ms,
         )
         audit_events.append(event.model_dump())
+        emit_trace_event(
+            "data_collected",
+            incident_id,
+            source="kubernetes",
+            status=status,
+            service=service,
+            namespace=namespace,
+            observations=cluster_data,
+        )
 
         return {
             "cluster_status": status,

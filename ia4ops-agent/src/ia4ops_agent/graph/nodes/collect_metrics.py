@@ -9,6 +9,7 @@ import time
 from typing import Any
 
 from ia4ops_agent.audit.models import AuditEvent
+from ia4ops_agent.audit.trace_logging import emit_trace_event
 from ia4ops_agent.graph.state import IncidentState
 from ia4ops_agent.providers.interfaces import MetricsProvider, MetricsUnavailableError
 
@@ -51,9 +52,23 @@ def make_collect_metrics_node(provider: MetricsProvider):
             input_summary={"service": service, "namespace": namespace},
             output_summary={"status": status, "keys": list(metrics_data.keys())},
             duration_ms=duration_ms,
-            error=errors[-1]["error"] if errors and errors[-1].get("step") == "collect_metrics" else None,
+            error=(
+                errors[-1]["error"]
+                if errors and errors[-1].get("step") == "collect_metrics"
+                else None
+            ),
         )
         audit_events.append(event.model_dump())
+        emit_trace_event(
+            "data_collected",
+            incident_id,
+            source="prometheus",
+            status=status,
+            service=service,
+            namespace=namespace,
+            window_minutes=metrics_data.get("window_minutes", 15),
+            observations=metrics_data,
+        )
 
         return {
             "metrics_status": status,

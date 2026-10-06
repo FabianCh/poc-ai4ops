@@ -98,6 +98,46 @@ async def _run_graph(payload: dict[str, Any], audit_dir: Path) -> dict[str, Any]
     return await graph.ainvoke(initial_state)
 
 
+async def test_trace_events_capture_collection_and_diagnosis(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Trace output is JSONL, correlated, and includes bounded evidence and the LLM result."""
+    initial_incident_id = "inc-trace-test"
+    graph = build_graph(providers=Providers.mock(), audit_dir=tmp_path)
+    result = await graph.ainvoke(
+        {
+            "raw_alert": PAYLOAD_A,
+            "incident_id": initial_incident_id,
+        }
+    )
+
+    events = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line]
+    event_types = {event["event"] for event in events}
+
+    assert result["incident_id"] == initial_incident_id
+    assert result["report"]["incident_id"] == initial_incident_id
+    assert {
+        "incident_initialized",
+        "data_collected",
+        "diagnostic_context_built",
+        "diagnosis_generated",
+        "incident_finalized",
+    } <= event_types
+
+    log_event = next(
+        event
+        for event in events
+        if event["event"] == "data_collected" and event["source"] == "loki"
+    )
+    assert log_event["incident_id"] == initial_incident_id
+    assert log_event["log_samples"][0]["message"].startswith("timeout connecting")
+
+    diagnosis_event = next(event for event in events if event["event"] == "diagnosis_generated")
+    assert diagnosis_event["diagnosis"]["affected_service"] == "product-catalog"
+    assert diagnosis_event["diagnosis"]["action_executed"] is False
+
+
 def _expected_steps(case: str) -> list[str]:
     base = ["initialize", "collect_metrics", "collect_logs", "collect_cluster",
             "build_context", "diagnose", "validate", "finalize"]
@@ -155,14 +195,18 @@ class TestCaseA:
         for expected in _expected_steps("a"):
             assert expected in steps, f"Étape manquante dans l'audit : {expected}"
 
-    async def test_audit_trail_written_to_disk(self, result: dict[str, Any], tmp_path: Path) -> None:
+    async def test_audit_trail_written_to_disk(
+        self, result: dict[str, Any], tmp_path: Path
+    ) -> None:
         incident_id = result["incident_id"]
         audit_file = tmp_path / f"audit-{incident_id}.jsonl"
         assert audit_file.exists(), "Fichier d'audit non créé"
-        lines = [l for l in audit_file.read_text().splitlines() if l.strip()]
+        lines = [line for line in audit_file.read_text().splitlines() if line.strip()]
         assert len(lines) >= 8, f"Attendu ≥8 événements d'audit, trouvé {len(lines)}"
 
-    async def test_audit_events_are_valid_json(self, result: dict[str, Any], tmp_path: Path) -> None:
+    async def test_audit_events_are_valid_json(
+        self, result: dict[str, Any], tmp_path: Path
+    ) -> None:
         incident_id = result["incident_id"]
         audit_file = tmp_path / f"audit-{incident_id}.jsonl"
         for line in audit_file.read_text().splitlines():
@@ -211,7 +255,9 @@ class TestCaseB:
         for s in _expected_steps("b"):
             assert s in steps
 
-    async def test_audit_trail_written_to_disk(self, result: dict[str, Any], tmp_path: Path) -> None:
+    async def test_audit_trail_written_to_disk(
+        self, result: dict[str, Any], tmp_path: Path
+    ) -> None:
         incident_id = result["incident_id"]
         assert (tmp_path / f"audit-{incident_id}.jsonl").exists()
 

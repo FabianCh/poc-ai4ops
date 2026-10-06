@@ -8,6 +8,7 @@ import time
 from typing import Any
 
 from ia4ops_agent.audit.models import AuditEvent
+from ia4ops_agent.audit.trace_logging import emit_trace_event
 from ia4ops_agent.domain.diagnosis import DiagnosticFailure
 from ia4ops_agent.graph.state import IncidentState
 from ia4ops_agent.llm.interface import DiagnosisError, LLMClient
@@ -22,6 +23,7 @@ def make_diagnose_node(llm_client: LLMClient):
         incident_context = state.get("incident_context", {})
         audit_events = list(state.get("audit_events", []))
         errors = list(state.get("errors", []))
+        error_type = None
 
         try:
             output, llm_summary = await llm_client.diagnose(incident_context)
@@ -38,6 +40,7 @@ def make_diagnose_node(llm_client: LLMClient):
             diagnosis = failure.model_dump()
             diag_status = "error"
             error_msg = str(exc)
+            error_type = type(exc).__name__
             errors.append({"step": "diagnose", "error": error_msg})
             llm_summary = None
         except Exception as exc:  # noqa: BLE001
@@ -49,6 +52,7 @@ def make_diagnose_node(llm_client: LLMClient):
             diagnosis = failure.model_dump()
             diag_status = "error"
             error_msg = str(exc)
+            error_type = type(exc).__name__
             errors.append({"step": "diagnose", "error": error_msg})
             llm_summary = None
 
@@ -68,6 +72,17 @@ def make_diagnose_node(llm_client: LLMClient):
             error=error_msg,
         )
         audit_events.append(event.model_dump())
+        emit_trace_event(
+            "diagnosis_generated",
+            incident_id,
+            status=diag_status,
+            model=llm_summary.model_name if llm_summary else None,
+            prompt_version=llm_summary.prompt_version if llm_summary else None,
+            attempts=llm_summary.total_attempts if llm_summary else 0,
+            duration_ms=llm_summary.total_duration_ms if llm_summary else duration_ms,
+            diagnosis=diagnosis,
+            error_type=error_type,
+        )
 
         return {
             "diagnosis": diagnosis,

@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from ia4ops_agent.audit.models import AuditEvent
+from ia4ops_agent.audit.trace_logging import emit_trace_event
 from ia4ops_agent.domain.alerts import AlertmanagerWebhook
 from ia4ops_agent.graph.state import IncidentState
 
@@ -26,7 +27,9 @@ def initialize_node(state: IncidentState) -> dict[str, Any]:
     webhook = AlertmanagerWebhook(**raw)
     primary = webhook.primary_alert()
 
-    incident_id = f"inc-{start.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
+    incident_id = state.get("incident_id") or (
+        f"inc-{start.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
+    )
     correlation_id = webhook.groupKey
 
     normalized = {
@@ -51,6 +54,12 @@ def initialize_node(state: IncidentState) -> dict[str, Any]:
         input_summary={"group_key": correlation_id, "alerts_count": len(webhook.alerts)},
         output_summary={"service": normalized["service"], "severity": normalized["severity"]},
         duration_ms=duration_ms,
+    )
+    emit_trace_event(
+        "incident_initialized",
+        incident_id,
+        correlation_id=correlation_id,
+        normalized_alert=normalized,
     )
 
     return {
