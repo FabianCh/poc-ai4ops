@@ -7,7 +7,7 @@ export KUBECONFIG ?= $(CURDIR)/.kube/config
 
 .PHONY: help
 help: ## Affiche cette aide
-	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
 
 ## --- Infrastructure (GCP + k3s) ---
 .PHONY: init plan apply destroy output
@@ -56,17 +56,17 @@ flux-reconcile: ## Force la synchronisation avec le repo
 	flux reconcile kustomization flux-system --with-source
 
 ## --- Secrets (hors Git) ---
-.PHONY: secrets grafana-password keep-password keep-secrets
-secrets: ## Affiche les URLs et identifiants générés (Grafana, Keep)
+.PHONY: get-secrets get-grafana-password get-keep-password create-keep-secrets
+get-secrets: ## Affiche les URLs et identifiants générés (Grafana, Keep)
 	bin/get-secrets.sh all
 
-grafana-password: ## Affiche l'URL et le mot de passe admin de Grafana
+get-grafana-password: ## Affiche l'URL et le mot de passe admin de Grafana
 	bin/get-secrets.sh grafana
 
-keep-password: ## Affiche l'URL et le mot de passe admin de Keep
+get-keep-password: ## Affiche l'URL et le mot de passe admin de Keep
 	bin/get-secrets.sh keep
 
-keep-secrets: ## Crée les Secrets de Keep et la clé d'API d'Alertmanager (idempotent)
+create-keep-secrets: ## Crée les Secrets de Keep et la clé d'API d'Alertmanager (idempotent)
 	bin/create-keep-secrets.sh
 
 ## --- Qualité ---

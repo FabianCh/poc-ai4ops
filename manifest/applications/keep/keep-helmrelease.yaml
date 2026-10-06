@@ -2,7 +2,7 @@
 # Keep (keephq.dev, MIT) : console d'alertes (agrégation, déduplication, historique,
 # workflows). Reçoit les alertes d'Alertmanager (receiver "keep", voir
 # manifest/base/kube-prometheus-stack). Authentification "DB" (login/mot de passe) :
-# les secrets ne sont PAS dans Git, ils sont créés par `make keep-secrets` :
+# les secrets ne sont PAS dans Git, ils sont créés par `make create-keep-secrets` :
 #   keep-backend-auth   KEEP_JWT_SECRET, KEEP_DEFAULT_PASSWORD, KEEP_DEFAULT_API_KEYS
 #   keep-frontend-auth  NEXTAUTH_SECRET
 # Sans ces Secrets, les pods restent en attente (CreateContainerConfigError) : Keep ne

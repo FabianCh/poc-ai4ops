@@ -50,5 +50,5 @@ if [[ "$TARGET" == keep || "$TARGET" == all ]]; then
   [[ "$TARGET" == all ]] && echo
   show "Keep" keep keep admin \
     "$(secret keep keep-backend-auth KEEP_DEFAULT_PASSWORD)" \
-    "Lancer make keep-secrets."
+    "Lancer make create-keep-secrets."
 fi

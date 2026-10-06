@@ -10,7 +10,7 @@ automatiquement vers cette IP ; tous les endpoints publics sont en HTTPS (certif
 | --- | --- | --- |
 | `https://whoami.<IP>.sslip.io` | Application de démo `demo-whoami` (renvoie les infos de la requête) | Aucune |
 | `https://grafana.<IP>.sslip.io` | Grafana : dashboards, Explore (Prometheus, Loki, Jaeger), Alerting | `admin` + mot de passe généré ([récupération](cloudshell.md#mot-de-passe-grafana)) |
-| `https://keep.<IP>.sslip.io` | Keep : console d'alertes (historique, déduplication, firing/resolved) | `admin` + mot de passe généré par `make keep-secrets` ([récupération](cloudshell.md#keep-console-dalertes)) |
+| `https://keep.<IP>.sslip.io` | Keep : console d'alertes (historique, déduplication, firing/resolved) | `admin` + mot de passe généré par `make create-keep-secrets` ([récupération](cloudshell.md#keep-console-dalertes)) |
 | `https://otel-demo.<IP>.sslip.io/` | OpenTelemetry Demo : boutique Astronomy Shop | Aucune |
 | `https://otel-demo.<IP>.sslip.io/feature` | UI des feature flags flagd : **injection de pannes** | Aucune |
 | `https://otel-demo.<IP>.sslip.io/jaeger/ui` | Jaeger : traces de la démo | Aucune |

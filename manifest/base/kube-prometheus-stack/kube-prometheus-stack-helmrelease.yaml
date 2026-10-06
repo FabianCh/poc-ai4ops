@@ -118,7 +118,7 @@ spec:
           - url: http://ia4ops-agent.ia4ops.svc:8000/webhooks/alertmanager
             send_resolved: true
         # Clé d'API (rôle webhook) lue dans un fichier : Secret keep-alertmanager-api-key créé
-        # par `make keep-secrets`, jamais dans Git.
+        # par `make create-keep-secrets`, jamais dans Git.
         - name: keep
           webhook_configs:
           - url: http://keep-backend.keep.svc:8080/alerts/event/prometheus

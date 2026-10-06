@@ -33,8 +33,8 @@ Liste complète des endpoints : [endpoints.md](endpoints.md).
 
 ## 3. Secrets
 
-Avec le dépôt cloné et `kubectl` configuré (voir plus bas), `make secrets` affiche d'un coup les URLs
-et les mots de passe de Grafana et de Keep (`make grafana-password`, `make keep-password` pour un seul).
+Avec le dépôt cloné et `kubectl` configuré (voir plus bas), `make get-secrets` affiche d'un coup les URLs
+et les mots de passe de Grafana et de Keep (`make get-grafana-password`, `make get-keep-password` pour un seul).
 Les commandes manuelles ci-dessous donnent le même résultat sans `make`.
 
 ### Mot de passe Grafana
@@ -57,7 +57,7 @@ créer les Secrets (mot de passe admin, clé JWT, clé d'API d'Alertmanager) ave
 ([plus bas](#kubeconfig-accès-kubectl-depuis-cloud-shell)) :
 
 ```bash
-make keep-secrets        # idempotent : affiche le mot de passe admin à la première création seulement
+make create-keep-secrets        # idempotent : affiche le mot de passe admin à la première création seulement
 ```
 
 Sans `make` (Cloud Shell sans le dépôt cloné), cloner le dépôt puis lancer `bin/create-keep-secrets.sh`.

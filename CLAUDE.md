@@ -37,7 +37,7 @@ bin/                   # Helper scripts (kubeconfig, flux upgrade, manifest vali
   `cert-manager.io/cluster-issuer: letsencrypt-prod`; the Flux Kustomization must declare
   `postBuild.substituteFrom` the `cluster-vars` ConfigMap.
 - The repo is public and there is no secret management (POC): never commit secrets or credentials. Secrets
-  a workload needs (e.g. Keep) are created out of Git by a script in `bin/` (`make keep-secrets`) and
+  a workload needs (e.g. Keep) are created out of Git by a script in `bin/` (`make create-keep-secrets`) and
   referenced by name in the manifests; pods wait for them rather than starting unprotected.
 
 ## Checks

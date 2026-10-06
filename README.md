@@ -189,8 +189,8 @@ Alertmanager envoie toutes les alertes à **Keep** (console d'alertes open sourc
 historique, déduplication, statut firing/resolved) et, pour `otel-demo`, à l'agent
 `ia4ops-agent`. Keep est publié sur `https://keep.<IP>.sslip.io` (login `admin`) ; ses
 secrets ne sont pas dans Git : après le premier déploiement Flux, lancer **une fois**
-`make keep-secrets` (génère le mot de passe admin et la clé d'API d'Alertmanager,
-voir [docs/cloudshell.md](docs/cloudshell.md#keep-console-dalertes)). `make secrets` réaffiche
+`make create-keep-secrets` (génère le mot de passe admin et la clé d'API d'Alertmanager,
+voir [docs/cloudshell.md](docs/cloudshell.md#keep-console-dalertes)). `make get-secrets` réaffiche
 ensuite les URLs et mots de passe de Grafana et de Keep.
 
 Des alertes Prometheus (`manifest/applications/otel-demo/otel-demo-prometheusrule.yaml`)

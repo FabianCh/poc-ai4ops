@@ -10,7 +10,7 @@
 # et la clé d'API sont figés dans la base de Keep au premier démarrage) ; seul le Secret
 # d'Alertmanager est recréé à partir de la clé existante.
 #
-# Usage : make keep-secrets   (kubectl doit joindre le cluster : make kubeconfig / make tunnel)
+# Usage : make create-keep-secrets   (kubectl doit joindre le cluster : make kubeconfig / make tunnel)
 set -euo pipefail
 
 KEEP_NS=keep
