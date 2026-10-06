@@ -56,7 +56,16 @@ flux-reconcile: ## Force la synchronisation avec le repo
 	flux reconcile kustomization flux-system --with-source
 
 ## --- Secrets (hors Git) ---
-.PHONY: keep-secrets
+.PHONY: secrets grafana-password keep-password keep-secrets
+secrets: ## Affiche les URLs et identifiants générés (Grafana, Keep)
+	bin/get-secrets.sh all
+
+grafana-password: ## Affiche l'URL et le mot de passe admin de Grafana
+	bin/get-secrets.sh grafana
+
+keep-password: ## Affiche l'URL et le mot de passe admin de Keep
+	bin/get-secrets.sh keep
+
 keep-secrets: ## Crée les Secrets de Keep et la clé d'API d'Alertmanager (idempotent)
 	bin/create-keep-secrets.sh
 

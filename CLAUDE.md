@@ -22,7 +22,7 @@ manifest/
   applications/        # Workloads exposed on the cluster
 ia4ops-agent/          # AI diagnosis agent (Python 3.14, uv, FastAPI + LangGraph) + Dockerfile
                        # image built/pushed to ghcr.io by .github/workflows/ia4ops-agent.yml on main
-bin/                   # Helper scripts (kubeconfig, flux upgrade, manifest validation, create-keep-secrets)
+bin/                   # Helper scripts (kubeconfig, flux upgrade, manifest validation, create-keep-secrets, get-secrets)
 ```
 
 ## Conventions
