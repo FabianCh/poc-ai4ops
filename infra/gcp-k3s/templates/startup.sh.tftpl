@@ -33,6 +33,16 @@ retry() {
 
 log "=== Bootstrap k3s (IP publique : $EXTERNAL_IP) ==="
 
+# --- Limites inotify ----------------------------------------------------------
+# Les défauts d'Ubuntu (128 instances) sont vite atteints avec Flux, Alloy, Prometheus,
+# les config-reloader... : erreur "failed to create fsnotify watcher: too many open files".
+# Appliqué tout de suite (sysctl) et persistant au reboot (sysctl.d).
+cat > /etc/sysctl.d/99-k3s-inotify.conf <<EOF
+fs.inotify.max_user_instances = 1024
+fs.inotify.max_user_watches = 524288
+EOF
+sysctl -q -p /etc/sysctl.d/99-k3s-inotify.conf
+
 # --- Configuration k3s -------------------------------------------------------
 # tls-san : le certificat de l'API inclut l'IP publique (kubectl depuis l'extérieur).
 # Ne PAS définir node-external-ip : k3s l'utiliserait comme advertise-address de
