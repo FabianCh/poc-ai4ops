@@ -51,6 +51,7 @@ certificat Let's Encrypt automatiquement.
 | [`manifest/flux-system/`](manifest/flux-system/) | Bootstrap FluxCD et Kustomizations Flux (`base/`, `applications/`) |
 | [`manifest/base/`](manifest/base/) | Socle : cert-manager, ClusterIssuers Let's Encrypt, observabilité (kube-prometheus-stack, Loki, Alloy) |
 | [`manifest/applications/`](manifest/applications/) | Applications : `demo-whoami`, `otel-demo` (OpenTelemetry Demo) |
+| [`ia4ops-agent/`](ia4ops-agent/) | Agent IA de diagnostic (FastAPI + LangGraph), image `ghcr.io/fabianch/poc-ai4ops/ia4ops-agent` |
 | [`bin/`](bin/) | Kubeconfig, upgrade Flux, validation des manifests |
 | [`docs/`](docs/) | Endpoints, accès depuis Cloud Shell, coûts |
 | `Makefile` | Raccourcis (`make help`) |

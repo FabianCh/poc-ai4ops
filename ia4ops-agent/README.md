@@ -107,6 +107,30 @@ Voir `docs/architecture.md` pour le diagramme complet.
 | `LOG_LEVEL` | `INFO` | Niveau de log |
 | `AUDIT_LOG_DIR` | `./audit_logs` | Répertoire de l'audit trail |
 
+## Image Docker
+
+Construite par la pipeline [`.github/workflows/ia4ops-agent.yml`](../.github/workflows/ia4ops-agent.yml)
+à chaque modification de `ia4ops-agent/**` sur `main` (tests puis build), et publiée sur GitHub
+Container Registry :
+
+```
+ghcr.io/fabianch/poc-ai4ops/ia4ops-agent:latest       # dernière version de main
+ghcr.io/fabianch/poc-ai4ops/ia4ops-agent:sha-<commit>  # version figée
+```
+
+Build et exécution en local :
+
+```bash
+docker build -t ia4ops-agent .
+docker run --rm -p 8000:8000 ia4ops-agent                      # LLM_PROVIDER=mock
+docker run --rm -p 8000:8000 --env-file .env ia4ops-agent      # configuration via .env
+```
+
+L'image (Python 3.14 slim, utilisateur non-root `10001`) écoute sur le port `8000`, expose
+`/health` (utilisé par le `HEALTHCHECK`) et écrit l'audit trail dans `/app/audit_logs`
+(`AUDIT_DIR`). Aucun secret n'est embarqué (`.env` et credentials exclus par `.dockerignore`) :
+les fournir à l'exécution (variables d'environnement, secret Kubernetes monté).
+
 ## Raccordement plateforme
 
 Pour connecter l'agent au cluster GCP de Fabian :

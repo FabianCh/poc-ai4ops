@@ -1,0 +1,23 @@
+# Uniquement pyproject.toml, uv.lock, README.md et src/ sont utiles au build
+.venv/
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache/
+.ruff_cache/
+tests/
+scripts/
+docs/
+audit_logs/
+Dockerfile
+.dockerignore
+
+# Secrets : ne jamais les embarquer dans l'image
+.env
+.env.*
+credentials/
+*.json.key
+*-service-account.json
+service-account*.json
+credentials*.json
+*-credentials.json
+gcp-key*.json

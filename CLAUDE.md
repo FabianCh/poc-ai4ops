@@ -20,6 +20,8 @@ manifest/
     applications/      # Kustomization CRDs pointing to manifest/applications/<app>/
   base/                # Infrastructure (cert-manager, ClusterIssuers, operators, monitoring...)
   applications/        # Workloads exposed on the cluster
+ia4ops-agent/          # AI diagnosis agent (Python 3.14, uv, FastAPI + LangGraph) + Dockerfile
+                       # image built/pushed to ghcr.io by .github/workflows/ia4ops-agent.yml on main
 bin/                   # Helper scripts (kubeconfig, flux upgrade, manifest validation)
 ```
 
@@ -40,4 +42,8 @@ bin/                   # Helper scripts (kubeconfig, flux upgrade, manifest vali
 
 ```bash
 make lint   # terraform fmt/validate, shellcheck, kustomize build + kubeconform on manifest/
+cd ia4ops-agent && uv sync --locked --extra dev && uv run pytest   # agent tests
 ```
+
+`manifest/` only holds Kubernetes manifests deployed by Flux: application source code lives in its
+own top-level directory (e.g. `ia4ops-agent/`).
