@@ -30,6 +30,7 @@ from ia4ops_agent.api.models import (
     AlertWebhookRequest,
     IncidentResponse,
 )
+from ia4ops_agent.audit.trace_logging import emit_trace_event
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,12 @@ async def receive_alertmanager_webhook(
 
     # --- Watchdog : ignorer silencieusement ---
     if payload.is_watchdog():
+        emit_trace_event(
+            "webhook_ignored",
+            "watchdog",
+            reason="watchdog",
+            alert_names=[alert.labels.alertname for alert in payload.alerts],
+        )
         logger.debug("Alerte Watchdog reçue — ignorée.")
         return AlertAccepted(
             incident_id="watchdog",
@@ -77,6 +84,13 @@ async def receive_alertmanager_webhook(
     dedup_key = payload.make_dedup_key()
     if dedup_key in app_state.dedup_cache:
         incident_id = app_state.dedup_cache[dedup_key]
+        emit_trace_event(
+            "webhook_duplicate",
+            incident_id,
+            alert_status=payload.status,
+            fingerprints=[alert.fingerprint for alert in payload.alerts],
+            dedup_key=dedup_key,
+        )
         logger.info(
             "Notification dupliquée ignorée. incident_id=%s dedup_key=%s",
             incident_id,
@@ -84,15 +98,25 @@ async def receive_alertmanager_webhook(
         )
         return AlertDuplicate(incident_id=incident_id)
 
-    # --- Générer un incident_id et enregistrer ---
-    # L'incident_id définitif sera généré par le nœud initialize du graphe.
-    # On réserve une entrée "pending" dans le store avec une clé temporaire
-    # issue du groupKey pour la cohérence avant que le graphe démarre.
+    # --- Générer l'incident_id et réserver l'entrée avant le démarrage du graphe ---
     import uuid
     incident_id = f"inc-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
 
     received_at = datetime.now(UTC).isoformat()
     app_state.dedup_cache[dedup_key] = incident_id
+
+    emit_trace_event(
+        "webhook_received",
+        incident_id,
+        alert_status=payload.status,
+        alert_count=len(payload.alerts),
+        alert_names=[alert.labels.alertname for alert in payload.alerts],
+        fingerprints=[alert.fingerprint for alert in payload.alerts],
+        services=payload.affected_services(),
+        namespaces=sorted({alert.labels.namespace for alert in payload.alerts}),
+        starts_at=[alert.startsAt.isoformat() for alert in payload.alerts],
+        group_key=payload.groupKey,
+    )
 
     # Evict oldest entries si le cache est plein
     if len(app_state.dedup_cache) > app_state.dedup_cache_max_size:
@@ -232,9 +256,21 @@ async def _run_graph(
             final_incident_id,
             status,
         )
+        emit_trace_event(
+            "incident_completed",
+            final_incident_id,
+            status=status,
+            source_status=report.get("source_status", {}),
+            action_executed=report.get("action_executed", False),
+        )
 
     except Exception as exc:  # noqa: BLE001
         logger.exception("Erreur irrécupérable dans le graphe. incident_id=%s", incident_id)
+        emit_trace_event(
+            "incident_failed",
+            incident_id,
+            error_type=type(exc).__name__,
+        )
         if incident_id in store:
             store[incident_id] = {
                 **store[incident_id],

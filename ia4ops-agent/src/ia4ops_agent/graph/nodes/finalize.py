@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from ia4ops_agent.audit.models import AuditEvent
+from ia4ops_agent.audit.trace_logging import emit_trace_event
 from ia4ops_agent.audit.writer import AuditWriter
 from ia4ops_agent.graph.state import IncidentState
 
@@ -68,6 +69,16 @@ def make_finalize_node(audit_writer: AuditWriter):
                 audit_writer.write(evt)
             except Exception:  # noqa: BLE001
                 pass  # L'audit ne bloque jamais le workflow
+
+        emit_trace_event(
+            "incident_finalized",
+            incident_id,
+            status=report["status"],
+            source_status=report["source_status"],
+            warnings_count=len(warnings),
+            errors_count=len(errors),
+            action_executed=False,
+        )
 
         return {
             "report": report,

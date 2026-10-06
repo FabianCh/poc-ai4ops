@@ -264,6 +264,7 @@ async def test_get_incident_case_a_completes_with_diagnosis(client: AsyncClient)
     assert report["action_executed"] is False
 
     diagnosis = report.get("diagnosis", {})
+    assert report["incident_id"] == incident_id
     assert diagnosis.get("affected_service") == "product-catalog"
     assert diagnosis.get("severity_assessment") == "critical"
     assert diagnosis.get("action_executed") is False

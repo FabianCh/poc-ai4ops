@@ -8,6 +8,7 @@ import time
 from typing import Any
 
 from ia4ops_agent.audit.models import AuditEvent
+from ia4ops_agent.audit.trace_logging import emit_trace_event, sanitized_log_samples
 from ia4ops_agent.graph.state import IncidentState
 from ia4ops_agent.providers.interfaces import LogsProvider, LogsUnavailableError
 
@@ -53,6 +54,17 @@ def make_collect_logs_node(provider: LogsProvider):
             error=str(warnings[-1]) if status == "unavailable" and warnings else None,
         )
         audit_events.append(event.model_dump())
+        emit_trace_event(
+            "data_collected",
+            incident_id,
+            source="loki",
+            status=status,
+            service=service,
+            namespace=namespace,
+            window_minutes=15,
+            log_count=len(logs_data),
+            log_samples=sanitized_log_samples(logs_data),
+        )
 
         return {
             "logs_status": status,

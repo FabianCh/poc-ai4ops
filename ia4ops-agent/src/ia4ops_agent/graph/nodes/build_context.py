@@ -9,6 +9,7 @@ import time
 from typing import Any
 
 from ia4ops_agent.audit.models import AuditEvent
+from ia4ops_agent.audit.trace_logging import emit_trace_event
 from ia4ops_agent.domain.context import (
     IncidentContext,
     IncidentInfo,
@@ -56,7 +57,7 @@ def _build_logs_observation(logs: list[dict[str, Any]]) -> LogsObservation | Non
             )
             for msg, count in top
         ],
-        sample_event_ids=[l.get("event_id", "") for l in logs[:3]],
+        sample_event_ids=[log.get("event_id", "") for log in logs[:3]],
         window_minutes=15,
     )
 
@@ -129,8 +130,19 @@ async def build_context_node(state: IncidentState) -> dict[str, Any]:
         duration_ms=duration_ms,
     )
     audit_events.append(event.model_dump())
+    context_for_llm = ctx.to_llm_dict()
+    emit_trace_event(
+        "diagnostic_context_built",
+        incident_id,
+        source_status={
+            "metrics": metrics_status,
+            "logs": logs_status,
+            "cluster": cluster_status,
+        },
+        context=context_for_llm,
+    )
 
     return {
-        "incident_context": ctx.to_llm_dict(),
+        "incident_context": context_for_llm,
         "audit_events": audit_events,
     }

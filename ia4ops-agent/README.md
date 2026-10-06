@@ -73,9 +73,9 @@ curl http://localhost:8000/api/v1/incidents/<incident_id>
 ## Architecture
 
 ```
-POST /api/v1/alerts  (Alertmanager webhook v4)
+POST /webhooks/alertmanager  (Alertmanager webhook v4)
         ↓
-[Validation Pydantic + déduplication fingerprint]
+[Validation Pydantic + déduplication fingerprint + startsAt]
         ↓
 [Réponse 200 immédiate]
         ↓ (arrière-plan)
@@ -105,7 +105,7 @@ Voir `docs/architecture.md` pour le diagramme complet.
 | `GRAFANA_USER` | `admin` | Utilisateur Grafana |
 | `GRAFANA_PASSWORD` | — | Mot de passe Grafana |
 | `LOG_LEVEL` | `INFO` | Niveau de log |
-| `AUDIT_LOG_DIR` | `./audit_logs` | Répertoire de l'audit trail |
+| `AUDIT_DIR` | `audit_logs` | Répertoire de l'audit trail |
 
 ## Image Docker
 
@@ -154,6 +154,30 @@ kubectl -n ia4ops logs deploy/ia4ops-agent -f                  # webhooks reçus
 kubectl -n ia4ops port-forward svc/ia4ops-agent 8000           # puis http://localhost:8000/docs
 curl http://localhost:8000/api/v1/incidents/<incident_id>
 ```
+
+### Traces de diagnostic dans Grafana / Loki
+
+L'agent émet des événements JSON Lines sur stdout pour qu'Alloy les collecte avec les logs du pod.
+Les événements partagent le même `incident_id` et couvrent la réception du webhook, les
+observations Prometheus/Loki/Kubernetes, le contexte transmis au LLM, le diagnostic structuré
+et la finalisation. La trace ne contient pas le webhook complet ni le prompt brut. Les extraits
+de logs sont limités à 10 entrées de 500 caractères ; les champs identifiés comme secrets et
+les chaînes de type mot de passe ou bearer token sont expurgés.
+
+Dans Grafana Explore, sélectionner la datasource Loki et rechercher un incident :
+
+```logql
+{namespace="ia4ops"} | json | incident_id="inc-..."
+```
+
+Pour n'afficher que la réponse structurée du modèle :
+
+```logql
+{namespace="ia4ops"} | json | event="diagnosis_generated"
+```
+
+La disponibilité de ces événements dans Loki dépend de la collecte Alloy et de la rétention
+Loki configurée sur la plateforme. Leur présence en cluster doit être vérifiée après déploiement.
 
 ## Raccordement plateforme
 
