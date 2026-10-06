@@ -1,0 +1,22 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ia4ops
+images:
+# Tag figé (sha du commit) : mettre à jour après chaque build de la CI ia4ops-agent
+- name: ghcr.io/fabianch/poc-ai4ops/ia4ops-agent
+  newTag: sha-84dd36f
+# Labels communs sur les métadonnées uniquement : avec includeSelectors, kustomize
+# réécrirait aussi les podSelector des NetworkPolicy (dont celui ciblant Alertmanager).
+labels:
+- includeSelectors: false
+  includeTemplates: true
+  pairs:
+    app.kubernetes.io/name: ia4ops-agent
+    app.kubernetes.io/instance: ia4ops-agent
+resources:
+- ia4ops-agent-namespace.yaml
+- ia4ops-agent-pvc.yaml
+- ia4ops-agent-deployment.yaml
+- ia4ops-agent-service.yaml
+- ia4ops-agent-networkpolicy.yaml

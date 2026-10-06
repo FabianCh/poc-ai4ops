@@ -1,0 +1,14 @@
+---
+# Audit trail de l'agent (un fichier JSONL par incident), conservé entre redémarrages
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ia4ops-agent-audit
+  namespace: ia4ops
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi

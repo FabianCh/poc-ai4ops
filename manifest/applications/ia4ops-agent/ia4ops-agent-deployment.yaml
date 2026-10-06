@@ -1,0 +1,80 @@
+---
+# Agent IA de diagnostic (lecture seule) : reçoit les webhooks Alertmanager.
+# LLM_PROVIDER=mock : seul mode fonctionnel en cluster pour l'instant (providers réels
+# Prometheus/Loki/Kubernetes non implémentés, Gemini nécessite un service account GCP).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ia4ops-agent
+  namespace: ia4ops
+spec:
+  replicas: 1
+  # 1 seul réplica (cache de déduplication en mémoire) et PVC RWO : pas de rolling update
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ia4ops-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ia4ops-agent
+    spec:
+      # Aucun accès à l'API Kubernetes nécessaire (providers mockés)
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: ia4ops-agent
+        image: ghcr.io/fabianch/poc-ai4ops/ia4ops-agent
+        env:
+        - name: LLM_PROVIDER
+          value: mock
+        - name: AUDIT_DIR
+          value: /app/audit_logs
+        # Racine en lecture seule et utilisateur sans home : caches éventuels dans /tmp
+        - name: HOME
+          value: /tmp
+        ports:
+        - name: http
+          containerPort: 8000
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 20
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: audit
+          mountPath: /app/audit_logs
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: audit
+        persistentVolumeClaim:
+          claimName: ia4ops-agent-audit
+      - name: tmp
+        emptyDir: {}

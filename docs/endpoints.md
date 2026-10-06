@@ -65,6 +65,11 @@ kubeconfig, ou depuis Cloud Shell avec l'aperçu web, voir [cloudshell.md](cloud
 | Jaeger (UI + API) | `otel-demo/jaeger` | 16686 | `kubectl -n otel-demo port-forward svc/jaeger 16686` (UI sous `/jaeger/ui`) |
 | OTel Collector | `otel-demo/otel-collector` | 4317 (gRPC), 4318 (HTTP) | `kubectl -n otel-demo port-forward svc/otel-collector 4317 4318` |
 | flagd | `otel-demo/flagd` | 8013 (gRPC), 8016 (OFREP) | `kubectl -n otel-demo port-forward svc/flagd 8013 8016` |
+| Agent ia4ops (`/api/v1/incidents/{id}`, `/docs`) | `ia4ops/ia4ops-agent` | 8000 | `kubectl -n ia4ops port-forward svc/ia4ops-agent 8000` |
+
+L'agent `ia4ops-agent` n'accepte en entrée que les webhooks d'Alertmanager : une NetworkPolicy
+refuse tout autre trafic vers le namespace `ia4ops`, sauf depuis les pods Alertmanager du
+namespace `monitoring` (port 8000). `kubectl port-forward` n'est pas soumis aux NetworkPolicies.
 
 ## Outputs Terraform
 

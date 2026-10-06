@@ -1,0 +1,37 @@
+---
+# Seule source d'entrée prévue par le cadrage : les webhooks d'Alertmanager.
+# 1) Tout trafic entrant est refusé par défaut dans le namespace ia4ops...
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: ia4ops
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+---
+# 2) ...sauf depuis les pods Alertmanager du namespace monitoring, sur le port de l'agent.
+# (kubectl port-forward n'est pas soumis aux NetworkPolicies : la consultation reste possible.)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-alertmanager-webhook
+  namespace: ia4ops
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ia4ops-agent
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: alertmanager
+    ports:
+    - protocol: TCP
+      port: 8000

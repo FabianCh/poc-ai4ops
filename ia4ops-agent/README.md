@@ -131,6 +131,30 @@ L'image (Python 3.14 slim, utilisateur non-root `10001`) écoute sur le port `80
 (`AUDIT_DIR`). Aucun secret n'est embarqué (`.env` et credentials exclus par `.dockerignore`) :
 les fournir à l'exécution (variables d'environnement, secret Kubernetes monté).
 
+## Déploiement sur le cluster
+
+Manifests GitOps : [`manifest/applications/ia4ops-agent/`](../manifest/applications/ia4ops-agent/),
+déployés par Flux dans le namespace `ia4ops` :
+
+- `Deployment` 1 réplica, `LLM_PROVIDER=mock` (seul mode fonctionnel tant que les providers
+  réels ne sont pas implémentés), non-root, système de fichiers en lecture seule, sans token
+  d'API Kubernetes ; audit trail sur un PVC de 1 Gi ;
+- `Service` ClusterIP `ia4ops-agent.ia4ops.svc:8000`, sans exposition publique ;
+- `NetworkPolicy` : tout trafic entrant refusé, sauf depuis les pods Alertmanager du namespace
+  `monitoring` (seule source prévue par le cadrage) ;
+- Alertmanager route les alertes du namespace `otel-demo` vers
+  `POST /webhooks/alertmanager` (`send_resolved: true`), configuré dans
+  `manifest/base/kube-prometheus-stack/kube-prometheus-stack-helmrelease.yaml`.
+
+Version déployée : tag `newTag` de `manifest/applications/ia4ops-agent/kustomization.yaml`
+(`sha-<commit>` produit par la CI), à mettre à jour pour déployer une nouvelle image.
+
+```bash
+kubectl -n ia4ops logs deploy/ia4ops-agent -f                  # webhooks reçus, graphes exécutés
+kubectl -n ia4ops port-forward svc/ia4ops-agent 8000           # puis http://localhost:8000/docs
+curl http://localhost:8000/api/v1/incidents/<incident_id>
+```
+
 ## Raccordement plateforme
 
 Pour connecter l'agent au cluster GCP de Fabian :

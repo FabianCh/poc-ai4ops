@@ -80,8 +80,32 @@ spec:
                   storage: 10Gi
 
     alertmanager:
-      # Config par défaut (receiver "null") : le webhook de l'agent
-      # d'auto-remédiation sera branché ici plus tard.
+      # Routage : les alertes du namespace otel-demo sont envoyées à l'agent ia4ops-agent
+      # (webhook Alertmanager v4), le reste au receiver "null". route et receivers
+      # remplacent ceux du chart (les listes Helm ne fusionnent pas) ; inhibit_rules
+      # et global restent ceux par défaut.
+      config:
+        route:
+          group_by: [namespace]
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 12h
+          receiver: "null"
+          routes:
+          - receiver: "null"
+            matchers:
+            - alertname = "Watchdog"
+          - receiver: ia4ops-agent
+            matchers:
+            - namespace = "otel-demo"
+            group_by: [namespace, alertname]
+            repeat_interval: 4h
+        receivers:
+        - name: "null"
+        - name: ia4ops-agent
+          webhook_configs:
+          - url: http://ia4ops-agent.ia4ops.svc:8000/webhooks/alertmanager
+            send_resolved: true
       alertmanagerSpec:
         resources:
           requests:

@@ -48,5 +48,6 @@ flowchart TD
     cluster-issuers ---> |dependsOn| demo-whoami
     applications --> demo-whoami
     applications --> otel-demo
+    applications --> ia4ops-agent
     loki ---> |dependsOn| otel-demo
 ```
