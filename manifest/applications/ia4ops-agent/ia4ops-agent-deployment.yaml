@@ -39,6 +39,14 @@ spec:
           value: mock
         - name: AUDIT_DIR
           value: /app/audit_logs
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: /var/run/google/service-account.json
+        - name: GOOGLE_CLOUD_PROJECT
+          value: wavestone-cto-ai4ops
+        - name: VERTEX_AI_LOCATION
+          value: europe-west1
+        - name: LLM_MODEL
+          value: gemini-2.0-flash
         # Racine en lecture seule et utilisateur sans home : caches éventuels dans /tmp
         - name: HOME
           value: /tmp
@@ -74,9 +82,19 @@ spec:
           mountPath: /app/audit_logs
         - name: tmp
           mountPath: /tmp
+        - name: google-credentials
+          mountPath: /var/run/google
+          readOnly: true
       volumes:
       - name: audit
         persistentVolumeClaim:
           claimName: ia4ops-agent-audit
       - name: tmp
         emptyDir: {}
+      - name: google-credentials
+        secret:
+          secretName: model-garden-credentials
+          defaultMode: 0440
+          items:
+          - key: service-account.json
+            path: service-account.json
