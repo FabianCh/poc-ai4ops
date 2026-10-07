@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     Variables prioritaires :
     - LLM_PROVIDER          : "mock" (dev) ou "gemini" (prod)
+    - DATA_PROVIDER         : "mock" ou "real" pour les providers de données
     - GOOGLE_APPLICATION_CREDENTIALS : chemin vers le service account JSON (prod)
     - GOOGLE_CLOUD_PROJECT  : projet GCP (prod)
     """
@@ -38,6 +39,7 @@ class Settings(BaseSettings):
     # --- LLM ---
     # "mock" → FakeLLMClient, "gemini" → GeminiVertexClient
     llm_provider: str = Field(default="mock", alias="LLM_PROVIDER")
+    data_provider: str = Field(default="mock", alias="DATA_PROVIDER")
     # Nom du modèle Vertex AI — configurable sans toucher au code
     vertex_model: str = Field(default="gemini-2.0-flash", alias="LLM_MODEL")
 

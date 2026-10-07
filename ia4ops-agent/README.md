@@ -98,6 +98,7 @@ Voir `docs/architecture.md` pour le diagramme complet.
 | Variable | Défaut | Description |
 |---|---|---|
 | `LLM_PROVIDER` | `mock` | `mock` ou `gemini` |
+| `DATA_PROVIDER` | `mock` | `mock` ou `real` pour métriques, logs et état du cluster |
 | `GOOGLE_APPLICATION_CREDENTIALS` | — | Chemin vers le service account JSON GCP |
 | `GOOGLE_CLOUD_PROJECT` | — | ID du projet GCP |
 | `VERTEX_AI_LOCATION` | `europe-west1` | Région Vertex AI |
@@ -136,9 +137,8 @@ les fournir à l'exécution (variables d'environnement, secret Kubernetes monté
 Manifests GitOps : [`manifest/applications/ia4ops-agent/`](../manifest/applications/ia4ops-agent/),
 déployés par Flux dans le namespace `ia4ops` :
 
-- `Deployment` 1 réplica, `LLM_PROVIDER=mock` (seul mode fonctionnel tant que les providers
-  réels ne sont pas implémentés), non-root, système de fichiers en lecture seule, sans token
-  d'API Kubernetes ; audit trail sur un PVC de 1 Gi ;
+- `Deployment` 1 réplica, `LLM_PROVIDER=mock` et `DATA_PROVIDER=mock` par défaut, non-root,
+  système de fichiers en lecture seule, sans token d'API Kubernetes ; audit trail sur un PVC de 1 Gi ;
 - `Service` ClusterIP `ia4ops-agent.ia4ops.svc:8000`, sans exposition publique ;
 - `NetworkPolicy` : tout trafic entrant refusé, sauf depuis les pods Alertmanager du namespace
   `monitoring` (seule source prévue par le cadrage) ;
@@ -186,6 +186,7 @@ Pour connecter l'agent au cluster GCP de Fabian :
 1. Récupérer le mot de passe Grafana : `kubectl get secret -n monitoring kube-prometheus-stack-grafana -o jsonpath='{.data.admin-password}' | base64 -d`
 2. Remplir `GRAFANA_BASE_URL`, `GRAFANA_USER`, `GRAFANA_PASSWORD` dans `.env`
 3. Basculer `LLM_PROVIDER=gemini` et fournir `GOOGLE_APPLICATION_CREDENTIALS`
-4. Remplacer les providers mock par les implémentations réelles dans `providers/real/`
+4. Garder `DATA_PROVIDER=mock` pour utiliser Gemini avec les données simulées. Les providers
+   réels restent sélectionnables indépendamment avec `DATA_PROVIDER=real` une fois implémentés.
 
 Voir `providers/real/README.md` pour le détail des variables et des endpoints attendus.

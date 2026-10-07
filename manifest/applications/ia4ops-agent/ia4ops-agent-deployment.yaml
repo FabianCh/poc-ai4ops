@@ -1,7 +1,7 @@
 ---
 # Agent IA de diagnostic (lecture seule) : reçoit les webhooks Alertmanager.
-# LLM_PROVIDER=mock : seul mode fonctionnel en cluster pour l'instant (providers réels
-# Prometheus/Loki/Kubernetes non implémentés, Gemini nécessite un service account GCP).
+# Mode actuel : LLM et providers de données mockés. Gemini pourra être activé séparément
+# une fois le compte de service monté ; les providers Prometheus/Loki/Kubernetes sont incomplets.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -34,6 +34,8 @@ spec:
         image: ghcr.io/fabianch/poc-ai4ops/ia4ops-agent
         env:
         - name: LLM_PROVIDER
+          value: mock
+        - name: DATA_PROVIDER
           value: mock
         - name: AUDIT_DIR
           value: /app/audit_logs

@@ -18,6 +18,6 @@ class PrometheusProvider:
         window_minutes: int = 15,
     ) -> dict[str, Any]:
         raise NotImplementedError(
-            "PrometheusProvider non implémenté — utiliser LLM_PROVIDER=mock. "
+            "PrometheusProvider non implémenté — utiliser DATA_PROVIDER=mock. "
             "Voir providers/real/README.md pour les variables de configuration."
         )

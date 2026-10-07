@@ -4,15 +4,16 @@ Factory de providers — sélectionne mock ou real selon la configuration.
 Principe : le workflow ne connaît que les interfaces (Protocols).
 La factory résout les dépendances concrètes au démarrage de l'application.
 
-Variable de contrôle : LLM_PROVIDER (dans .env)
-  "mock"   → MockMetricsProvider, MockLogsProvider, MockClusterProvider
-  "gemini" → PrometheusProvider, LokiProvider, KubernetesProvider (Task 8)
+Variable de contrôle : DATA_PROVIDER (dans .env)
+  "mock" → MockMetricsProvider, MockLogsProvider, MockClusterProvider
+  "real" → PrometheusProvider, LokiProvider, KubernetesProvider
 """
 
 from __future__ import annotations
 
-import os
 from typing import TYPE_CHECKING
+
+from ia4ops_agent.config import Settings
 
 if TYPE_CHECKING:
     from ia4ops_agent.providers.interfaces import (
@@ -22,26 +23,28 @@ if TYPE_CHECKING:
     )
 
 
-def _get_provider_mode() -> str:
-    """Lit LLM_PROVIDER depuis l'environnement. Défaut : 'mock'."""
-    return os.environ.get("LLM_PROVIDER", "mock").lower().strip()
+def _get_data_provider_mode() -> str:
+    """Lit DATA_PROVIDER depuis l'environnement. Défaut : 'mock'."""
+    mode = Settings().data_provider.lower().strip()
+    if mode not in {"mock", "real"}:
+        raise ValueError("DATA_PROVIDER doit valoir 'mock' ou 'real'")
+    return mode
 
 
 def get_metrics_provider() -> MetricsProvider:
-    """Retourne le MetricsProvider approprié selon LLM_PROVIDER."""
-    mode = _get_provider_mode()
+    """Retourne le MetricsProvider approprié selon DATA_PROVIDER."""
+    mode = _get_data_provider_mode()
     if mode == "mock":
         from ia4ops_agent.providers.mock.metrics import MockMetricsProvider
         return MockMetricsProvider()
 
-    # mode == "gemini" ou autre → real providers (implémentés en Task 8)
     from ia4ops_agent.providers.real.prometheus import PrometheusProvider
     return PrometheusProvider()
 
 
 def get_logs_provider() -> LogsProvider:
-    """Retourne le LogsProvider approprié selon LLM_PROVIDER."""
-    mode = _get_provider_mode()
+    """Retourne le LogsProvider approprié selon DATA_PROVIDER."""
+    mode = _get_data_provider_mode()
     if mode == "mock":
         from ia4ops_agent.providers.mock.logs import MockLogsProvider
         return MockLogsProvider()
@@ -51,8 +54,8 @@ def get_logs_provider() -> LogsProvider:
 
 
 def get_cluster_provider() -> ClusterProvider:
-    """Retourne le ClusterProvider approprié selon LLM_PROVIDER."""
-    mode = _get_provider_mode()
+    """Retourne le ClusterProvider approprié selon DATA_PROVIDER."""
+    mode = _get_data_provider_mode()
     if mode == "mock":
         from ia4ops_agent.providers.mock.cluster import MockClusterProvider
         return MockClusterProvider()

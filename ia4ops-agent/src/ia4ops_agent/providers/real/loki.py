@@ -19,6 +19,6 @@ class LokiProvider:
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         raise NotImplementedError(
-            "LokiProvider non implémenté — utiliser LLM_PROVIDER=mock. "
+            "LokiProvider non implémenté — utiliser DATA_PROVIDER=mock. "
             "Voir providers/real/README.md pour les variables de configuration."
         )

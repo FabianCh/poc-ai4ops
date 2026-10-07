@@ -5,7 +5,7 @@ Couvre :
 - MockMetricsProvider : structure de sortie, valeurs par service, window override
 - MockLogsProvider : structure de sortie, cas C lève LogsUnavailableError, limit
 - MockClusterProvider : structure de sortie, cas C status=partial, events
-- Factory Providers : mock() retourne bien des instances mock, from_env() avec LLM_PROVIDER=mock
+- Factory Providers : mock() retourne bien des instances mock, from_env() respecte DATA_PROVIDER
 - Conformité Protocol (isinstance checks runtime_checkable)
 """
 
@@ -22,6 +22,9 @@ from ia4ops_agent.providers.interfaces import (
 from ia4ops_agent.providers.mock.cluster import MockClusterProvider
 from ia4ops_agent.providers.mock.logs import MockLogsProvider
 from ia4ops_agent.providers.mock.metrics import MockMetricsProvider
+from ia4ops_agent.providers.real.kubernetes import KubernetesProvider
+from ia4ops_agent.providers.real.loki import LokiProvider
+from ia4ops_agent.providers.real.prometheus import PrometheusProvider
 
 # ---------------------------------------------------------------------------
 # Tests MockMetricsProvider
@@ -215,11 +218,43 @@ class TestProvidersFactory:
         assert isinstance(providers.cluster, MockClusterProvider)
 
     def test_from_env_with_mock_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("LLM_PROVIDER", "mock")
+        monkeypatch.setenv("DATA_PROVIDER", "mock")
         providers = Providers.from_env()
         assert isinstance(providers.metrics, MockMetricsProvider)
         assert isinstance(providers.logs, MockLogsProvider)
         assert isinstance(providers.cluster, MockClusterProvider)
+
+    def test_gemini_llm_keeps_mock_data_providers(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("LLM_PROVIDER", "gemini")
+        monkeypatch.setenv("DATA_PROVIDER", "mock")
+
+        providers = Providers.from_env()
+
+        assert isinstance(providers.metrics, MockMetricsProvider)
+        assert isinstance(providers.logs, MockLogsProvider)
+        assert isinstance(providers.cluster, MockClusterProvider)
+
+    def test_mock_llm_can_use_real_data_providers(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("LLM_PROVIDER", "mock")
+        monkeypatch.setenv("DATA_PROVIDER", "real")
+
+        providers = Providers.from_env()
+
+        assert isinstance(providers.metrics, PrometheusProvider)
+        assert isinstance(providers.logs, LokiProvider)
+        assert isinstance(providers.cluster, KubernetesProvider)
+
+    def test_invalid_data_provider_is_rejected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("DATA_PROVIDER", "invalid")
+
+        with pytest.raises(ValueError, match="DATA_PROVIDER"):
+            Providers.from_env()
 
     def test_providers_satisfy_protocols(self) -> None:
         providers = Providers.mock()

@@ -17,7 +17,7 @@ class KubernetesProvider:
         namespace: str,
     ) -> dict[str, Any]:
         raise NotImplementedError(
-            "KubernetesProvider non implémenté — utiliser LLM_PROVIDER=mock. "
+            "KubernetesProvider non implémenté — utiliser DATA_PROVIDER=mock. "
             "Voir providers/real/README.md pour les variables de configuration."
         )
 
@@ -28,6 +28,6 @@ class KubernetesProvider:
         window_minutes: int = 15,
     ) -> list[dict[str, Any]]:
         raise NotImplementedError(
-            "KubernetesProvider non implémenté — utiliser LLM_PROVIDER=mock. "
+            "KubernetesProvider non implémenté — utiliser DATA_PROVIDER=mock. "
             "Voir providers/real/README.md pour les variables de configuration."
         )
