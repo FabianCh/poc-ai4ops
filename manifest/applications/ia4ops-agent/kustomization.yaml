@@ -5,7 +5,7 @@ namespace: ia4ops
 images:
 # Tag figé (sha du commit) : mettre à jour après chaque build de la CI ia4ops-agent
 - name: ghcr.io/fabianch/poc-ai4ops/ia4ops-agent
-  newTag: sha-84dd36f
+  newTag: sha-3869910
 # Labels communs sur les métadonnées uniquement : avec includeSelectors, kustomize
 # réécrirait aussi les podSelector des NetworkPolicy (dont celui ciblant Alertmanager).
 labels:

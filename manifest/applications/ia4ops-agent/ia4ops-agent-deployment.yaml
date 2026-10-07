@@ -1,7 +1,6 @@
 ---
 # Agent IA de diagnostic (lecture seule) : reçoit les webhooks Alertmanager.
-# Mode actuel : LLM et providers de données mockés. Gemini pourra être activé séparément
-# une fois le compte de service monté ; les providers Prometheus/Loki/Kubernetes sont incomplets.
+# LLM conservé en mock ; métriques et logs collectés via Grafana.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -20,7 +19,7 @@ spec:
       labels:
         app.kubernetes.io/name: ia4ops-agent
     spec:
-      # Aucun accès à l'API Kubernetes nécessaire (providers mockés)
+      # Les données sont collectées via Grafana ; aucun accès à l'API Kubernetes nécessaire.
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
@@ -36,7 +35,19 @@ spec:
         - name: LLM_PROVIDER
           value: mock
         - name: DATA_PROVIDER
-          value: mock
+          value: real
+        - name: GRAFANA_BASE_URL
+          value: https://grafana.34.140.119.20.sslip.io
+        - name: GRAFANA_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: grafana-credentials
+              key: username
+        - name: GRAFANA_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: grafana-credentials
+              key: password
         - name: AUDIT_DIR
           value: /app/audit_logs
         - name: GOOGLE_APPLICATION_CREDENTIALS
