@@ -42,6 +42,14 @@ class AlertDuplicate(BaseModel):
     message: str = "Notification déjà reçue. Traitement ignoré."
 
 
+class AlertResolved(BaseModel):
+    """Réponse à une notification de résolution, sans relancer le diagnostic."""
+
+    incident_id: str | None
+    status: Literal["resolved", "resolved_unmatched"]
+    message: str
+
+
 class IncidentStatus(BaseModel):
     """
     Résumé du statut d'un incident en cours ou terminé.
@@ -66,6 +74,8 @@ class IncidentResponse(BaseModel):
     incident_id: str
     status: Literal["pending", "running", "completed", "completed_with_errors", "failed"]
     received_at: str | None = None
+    alert_status: Literal["firing", "resolved"] | None = None
+    resolved_at: str | None = None
     # Rapport final (présent quand status = completed*)
     report: dict | None = None
     # Raison d'échec (présent quand status = failed)

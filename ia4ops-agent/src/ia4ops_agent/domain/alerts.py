@@ -6,6 +6,7 @@ Une notification = un groupe d'alertes. Déduplication par fingerprint + startsA
 """
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -35,7 +36,7 @@ class AlertAnnotations(BaseModel):
 class AlertItem(BaseModel):
     """Une alerte individuelle dans le groupe."""
 
-    status: str  # "firing" | "resolved" — validé au niveau webhook
+    status: Literal["firing", "resolved"]
     labels: AlertLabels
     annotations: AlertAnnotations = Field(default_factory=AlertAnnotations)
     startsAt: datetime
@@ -60,7 +61,7 @@ class AlertmanagerWebhook(BaseModel):
     version: str = Field(..., pattern="^4$")
     groupKey: str
     truncatedAlerts: int = 0
-    status: str  # "firing" | "resolved"
+    status: Literal["firing", "resolved"]
     receiver: str
     groupLabels: dict[str, str]
     commonLabels: dict[str, str]

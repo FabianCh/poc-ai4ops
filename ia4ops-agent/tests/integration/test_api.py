@@ -210,6 +210,60 @@ async def test_webhook_different_startsAt_not_duplicate(client: AsyncClient) -> 
     assert resp1.json()["incident_id"] != resp2.json()["incident_id"]
 
 
+async def test_webhook_resolved_updates_existing_incident_without_rerunning(
+    client: AsyncClient,
+) -> None:
+    """Une résolution met à jour l'incident existant sans lancer un second graphe."""
+    payload = _alert_payload("product-catalog", "test-fp-resolved")
+    firing_response = await client.post("/webhooks/alertmanager", json=payload)
+    incident_id = firing_response.json()["incident_id"]
+    completed = await _wait_for_completion(client, incident_id)
+
+    resolved_payload = {
+        **payload,
+        "status": "resolved",
+        "alerts": [
+            {
+                **payload["alerts"][0],
+                "status": "resolved",
+                "endsAt": "2026-10-05T12:10:00Z",
+            }
+        ],
+    }
+    resolved_response = await client.post(
+        "/webhooks/alertmanager",
+        json=resolved_payload,
+    )
+
+    assert resolved_response.status_code == 200
+    assert resolved_response.json()["status"] == "resolved"
+    assert resolved_response.json()["incident_id"] == incident_id
+
+    incident_response = await client.get(f"/api/v1/incidents/{incident_id}")
+    incident = incident_response.json()
+    assert incident["status"] == completed["status"]
+    assert incident["report"] == completed["report"]
+    assert incident["alert_status"] == "resolved"
+    assert incident["resolved_at"] == "2026-10-05T12:10:00+00:00"
+
+
+async def test_webhook_unmatched_resolved_is_acknowledged_without_diagnosis(
+    client: AsyncClient,
+) -> None:
+    """Une résolution orpheline est acquittée et ne crée pas de nouvel incident."""
+    payload = _alert_payload("product-catalog", "test-fp-orphan-resolved")
+    payload["status"] = "resolved"
+    payload["alerts"][0]["status"] = "resolved"
+    payload["alerts"][0]["endsAt"] = "2026-10-05T12:10:00Z"
+
+    response = await client.post("/webhooks/alertmanager", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "resolved_unmatched"
+    assert response.json()["incident_id"] is None
+    assert not app.state.incident_store
+
+
 async def test_webhook_watchdog_returns_accepted(client: AsyncClient) -> None:
     """L'alerte Watchdog est acceptée silencieusement (pas de diagnostic lancé)."""
     resp = await client.post("/webhooks/alertmanager", json=_watchdog_payload())

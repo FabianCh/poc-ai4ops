@@ -98,7 +98,7 @@ Voir `docs/architecture.md` pour le diagramme complet.
 | Variable | Défaut | Description |
 |---|---|---|
 | `LLM_PROVIDER` | `mock` | `mock` ou `gemini` |
-| `DATA_PROVIDER` | `mock` | `mock` ou `real` pour métriques, logs et état du cluster |
+| `DATA_PROVIDER` | `mock` | `mock` ou `real` pour métriques et logs ; le provider Kubernetes réel reste incomplet |
 | `GOOGLE_APPLICATION_CREDENTIALS` | — | Chemin vers le service account JSON GCP |
 | `GOOGLE_CLOUD_PROJECT` | — | ID du projet GCP |
 | `VERTEX_AI_LOCATION` | `europe-west1` | Région Vertex AI |
@@ -187,6 +187,7 @@ Pour connecter l'agent au cluster GCP de Fabian :
 2. Remplir `GRAFANA_BASE_URL`, `GRAFANA_USER`, `GRAFANA_PASSWORD` dans `.env`
 3. Basculer `LLM_PROVIDER=gemini` et fournir `GOOGLE_APPLICATION_CREDENTIALS`
 4. Garder `DATA_PROVIDER=mock` pour utiliser Gemini avec les données simulées. Les providers
-   réels restent sélectionnables indépendamment avec `DATA_PROVIDER=real` une fois implémentés.
+   Prometheus et Loki sont sélectionnables indépendamment avec `DATA_PROVIDER=real` après
+   configuration de Grafana ; le provider Kubernetes réel reste incomplet.
 
 Voir `providers/real/README.md` pour le détail des variables et des endpoints attendus.

@@ -27,6 +27,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from ia4ops_agent.api.models import (
     AlertAccepted,
     AlertDuplicate,
+    AlertResolved,
     AlertWebhookRequest,
     IncidentResponse,
 )
@@ -44,7 +45,7 @@ router = APIRouter()
 
 @router.post(
     "/webhooks/alertmanager",
-    response_model=AlertAccepted | AlertDuplicate,
+    response_model=AlertAccepted | AlertDuplicate | AlertResolved,
     summary="Réception d'une notification Alertmanager v4",
     description=(
         "Accepte un payload Alertmanager v4, déduplique par fingerprint+startsAt, "
@@ -56,7 +57,7 @@ async def receive_alertmanager_webhook(
     payload: AlertWebhookRequest,
     background_tasks: BackgroundTasks,
     request: Request,
-) -> AlertAccepted | AlertDuplicate:
+) -> AlertAccepted | AlertDuplicate | AlertResolved:
     """
     Point d'entrée principal des alertes Alertmanager.
 
@@ -82,6 +83,45 @@ async def receive_alertmanager_webhook(
 
     # --- Déduplication ---
     dedup_key = payload.make_dedup_key()
+    if payload.status == "resolved":
+        incident_id = app_state.dedup_cache.get(dedup_key)
+        entry = app_state.incident_store.get(incident_id) if incident_id else None
+        if entry is None:
+            emit_trace_event(
+                "webhook_resolution_unmatched",
+                "unmatched",
+                fingerprints=[alert.fingerprint for alert in payload.alerts],
+                dedup_key=dedup_key,
+            )
+            logger.warning(
+                "Résolution reçue sans incident firing correspondant. dedup_key=%s",
+                dedup_key,
+            )
+            return AlertResolved(
+                incident_id=None,
+                status="resolved_unmatched",
+                message="Résolution reçue sans incident actif correspondant.",
+            )
+
+        resolved_at = max(
+            (alert.endsAt for alert in payload.alerts if alert.is_resolved),
+            default=None,
+        )
+        entry["alert_status"] = "resolved"
+        entry["resolved_at"] = resolved_at.isoformat() if resolved_at else None
+        emit_trace_event(
+            "webhook_resolved",
+            incident_id,
+            fingerprints=[alert.fingerprint for alert in payload.alerts],
+            resolved_at=entry["resolved_at"],
+        )
+        logger.info("Incident résolu par Alertmanager. incident_id=%s", incident_id)
+        return AlertResolved(
+            incident_id=incident_id,
+            status="resolved",
+            message="Résolution associée à l'incident existant.",
+        )
+
     if dedup_key in app_state.dedup_cache:
         incident_id = app_state.dedup_cache[dedup_key]
         emit_trace_event(
@@ -127,6 +167,8 @@ async def receive_alertmanager_webhook(
     app_state.incident_store[incident_id] = {
         "incident_id": incident_id,
         "status": "pending",
+        "alert_status": payload.status,
+        "resolved_at": None,
         "received_at": received_at,
         "report": None,
         "failure": None,
