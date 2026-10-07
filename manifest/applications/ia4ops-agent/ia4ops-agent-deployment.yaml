@@ -46,7 +46,7 @@ spec:
         - name: VERTEX_AI_LOCATION
           value: europe-west1
         - name: LLM_MODEL
-          value: gemini-2.0-flash
+          value: gemini-2.5-flash
         # Racine en lecture seule et utilisateur sans home : caches éventuels dans /tmp
         - name: HOME
           value: /tmp
