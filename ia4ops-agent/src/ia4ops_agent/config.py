@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     grafana_username: str = Field(default="admin", alias="GRAFANA_USERNAME")
     grafana_password: str | None = Field(default=None, alias="GRAFANA_PASSWORD")
 
+    # --- Keep API (préparation du retour agent -> Keep) ---
+    keep_api_base_url: str | None = Field(default=None, alias="KEEP_API_BASE_URL")
+    keep_api_key: str | None = Field(default=None, alias="KEEP_API_KEY")
+
     # --- OTel Demo (Task 8) ---
     otel_demo_base_url: str | None = Field(
         default=None,

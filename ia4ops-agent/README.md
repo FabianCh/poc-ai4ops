@@ -103,10 +103,17 @@ Voir `docs/architecture.md` pour le diagramme complet.
 | `GOOGLE_CLOUD_PROJECT` | — | ID du projet GCP |
 | `VERTEX_AI_LOCATION` | `europe-west1` | Région Vertex AI |
 | `GRAFANA_BASE_URL` | — | URL Grafana (proxy Prometheus/Loki) |
-| `GRAFANA_USER` | `admin` | Utilisateur Grafana |
+| `GRAFANA_USERNAME` | `admin` | Utilisateur Grafana |
 | `GRAFANA_PASSWORD` | — | Mot de passe Grafana |
+| `KEEP_API_BASE_URL` | — | Base de l'API Keep, incluant `/v2` (client préparatoire non utilisé par le workflow) |
+| `KEEP_API_KEY` | — | Clé API Keep, à conserver hors du dépôt |
 | `LOG_LEVEL` | `INFO` | Niveau de log |
 | `AUDIT_DIR` | `audit_logs` | Répertoire de l'audit trail |
+
+Le client Keep est préparé avec des appels testés pour retrouver une alerte par fingerprint,
+créer un incident, lui associer des alertes et ajouter une activité. Il n'est pas encore appelé
+par le workflow ; aucune requête Keep n'est faite par l'agent tant que l'authentification et les
+scopes nécessaires ne sont pas confirmés.
 
 ## Image Docker
 
@@ -137,7 +144,8 @@ les fournir à l'exécution (variables d'environnement, secret Kubernetes monté
 Manifests GitOps : [`manifest/applications/ia4ops-agent/`](../manifest/applications/ia4ops-agent/),
 déployés par Flux dans le namespace `ia4ops` :
 
-- `Deployment` 1 réplica, `LLM_PROVIDER=mock` et `DATA_PROVIDER=mock` par défaut, non-root,
+- `Deployment` 1 réplica, `LLM_PROVIDER=mock` et `DATA_PROVIDER=real` actuellement,
+  non-root,
   système de fichiers en lecture seule, sans token d'API Kubernetes ; audit trail sur un PVC de 1 Gi ;
 - `Service` ClusterIP `ia4ops-agent.ia4ops.svc:8000`, sans exposition publique ;
 - `NetworkPolicy` : tout trafic entrant refusé, sauf depuis les pods Alertmanager du namespace
@@ -148,6 +156,32 @@ déployés par Flux dans le namespace `ia4ops` :
 
 Version déployée : tag `newTag` de `manifest/applications/ia4ops-agent/kustomization.yaml`
 (`sha-<commit>` produit par la CI), à mettre à jour pour déployer une nouvelle image.
+
+### Secrets du cluster et rotation des identifiants
+
+Les identifiants utilisés par l'agent sont actuellement fournis par des Kubernetes Secrets
+créés hors Git ; ils ne sont ni gérés ni synchronisés automatiquement par Flux depuis Grafana
+ou Keep. Le secret Grafana `grafana-credentials` est dans le namespace `ia4ops` et alimente
+`GRAFANA_USERNAME`/`GRAFANA_PASSWORD`. Le secret `model-garden-credentials` y fournit le
+compte de service Vertex AI. Un secret Keep pour l'agent sera ajouté si l'intégration Keep
+est activée ; le client Keep est préparé mais n'est pas encore appelé par le workflow.
+
+Un redémarrage de cluster ne fait pas nécessairement tourner les identifiants. En revanche,
+si Grafana ou Keep recrée/renouvelle ses identifiants (par exemple après une réinitialisation
+ou une rotation), mettre à jour manuellement le Kubernetes Secret correspondant dans le
+namespace `ia4ops`. Les variables d'environnement d'un conteneur ne sont pas actualisées dans
+un pod déjà démarré : après la mise à jour du Secret, redémarrer le Deployment pour charger
+les nouvelles valeurs, puis vérifier le rollout et les logs :
+
+```bash
+kubectl -n ia4ops rollout restart deployment/ia4ops-agent
+kubectl -n ia4ops rollout status deployment/ia4ops-agent --timeout=180s
+kubectl -n ia4ops logs deployment/ia4ops-agent --since=10m
+```
+
+Ne jamais inscrire les valeurs des secrets dans les manifests versionnés, les commandes
+conservées dans l'historique du shell ou les logs. Après une rotation, vérifier également
+l'accès à la datasource/service concerné depuis les événements du workflow.
 
 ```bash
 kubectl -n ia4ops logs deploy/ia4ops-agent -f                  # webhooks reçus, graphes exécutés
