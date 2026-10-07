@@ -67,6 +67,18 @@ Relire le mot de passe ensuite :
 kubectl -n keep get secret keep-backend-auth -o jsonpath='{.data.KEEP_DEFAULT_PASSWORD}' | base64 -d; echo
 ```
 
+Le même script crée la clé d'API de l'**agent IA4Ops** (rôle `admin`, seul rôle de Keep cumulant
+`read:alert` et `write:incident` ; il n'y a pas de rôle sur mesure) dans le Secret
+`ia4ops/ia4ops-agent-keep` (`KEEP_API_KEY`), sans toucher à celle d'Alertmanager. Si Keep est déjà
+installé, la clé est ajoutée à `KEEP_DEFAULT_API_KEYS` puis `keep-backend` est redémarré (Keep ne
+provisionne ses clés qu'au démarrage). Aucune clé n'est affichée ; pour la lire en local :
+
+```bash
+kubectl -n ia4ops get secret ia4ops-agent-keep -o jsonpath='{.data.KEEP_API_KEY}' | base64 -d; echo
+```
+
+L'agent joint Keep sur `http://keep-backend.keep.svc:8080` (sans préfixe `/v2`, réservé à l'Ingress public).
+
 Tant que les Secrets n'existent pas, les pods `keep-backend` et `keep-frontend` restent en
 `CreateContainerConfigError` (Keep ne démarre jamais sans authentification) et les envois
 d'Alertmanager vers Keep échouent, sans affecter ceux vers l'agent. Les valeurs de l'utilisateur

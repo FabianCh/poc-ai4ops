@@ -75,7 +75,8 @@ namespace `monitoring` (port 8000). `kubectl port-forward` n'est pas soumis aux 
 
 Le backend de Keep n'accepte les webhooks d'Alertmanager qu'avec une clé d'API (rôle `webhook`) et une
 NetworkPolicy limite ses entrées à Traefik (interface publique), aux pods Alertmanager du namespace
-`monitoring` et aux pods de Keep.
+`monitoring`, au pod `ia4ops-agent` (création d'incidents et commentaires, clé d'API dédiée) et aux
+pods de Keep.
 
 ## Outputs Terraform
 

@@ -48,6 +48,18 @@ spec:
             secretKeyRef:
               name: grafana-credentials
               key: password
+        # Retour agent -> Keep (incidents, alertes associées, commentaires). URL interne du
+        # backend (sans préfixe /v2, qui n'existe que sur l'Ingress public). La clé d'API
+        # (rôle admin de Keep) est créée par `make create-keep-secrets`, jamais dans Git ;
+        # optionnelle : sans elle l'agent démarre sans le retour vers Keep.
+        - name: KEEP_API_BASE_URL
+          value: http://keep-backend.keep.svc:8080
+        - name: KEEP_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ia4ops-agent-keep
+              key: KEEP_API_KEY
+              optional: true
         - name: AUDIT_DIR
           value: /app/audit_logs
         - name: GOOGLE_APPLICATION_CREDENTIALS

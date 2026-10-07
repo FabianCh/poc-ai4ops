@@ -3,6 +3,7 @@
 #   - Traefik (kube-system) : interface, API (/v2) et websocket publiés par l'Ingress ;
 #   - Alertmanager (monitoring) : webhook d'alertes vers le backend (8080) ;
 #   - Traefik vers le pod solveur HTTP-01 de cert-manager (émission du certificat Let's Encrypt) ;
+#   - l'agent IA4Ops (namespace ia4ops) vers le backend : incidents, alertes associées, commentaires ;
 #   - les pods de Keep entre eux (front -> back, back -> base, back -> websocket).
 # Tout le reste est refusé (base MySQL sans mot de passe incluse). kubectl port-forward
 # n'est pas soumis aux NetworkPolicies.
@@ -105,3 +106,28 @@ spec:
     ports:
     - protocol: TCP
       port: 8089
+---
+# L'agent IA4Ops écrit dans Keep (API du backend, port 8080) : création d'incident, association
+# des alertes par fingerprint, commentaires de diagnostic.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ia4ops-agent
+  namespace: keep
+spec:
+  podSelector:
+    matchLabels:
+      keep-component: backend
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ia4ops
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: ia4ops-agent
+    ports:
+    - protocol: TCP
+      port: 8080
