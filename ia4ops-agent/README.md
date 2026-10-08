@@ -105,15 +105,19 @@ Voir `docs/architecture.md` pour le diagramme complet.
 | `GRAFANA_BASE_URL` | — | URL Grafana (proxy Prometheus/Loki) |
 | `GRAFANA_USERNAME` | `admin` | Utilisateur Grafana |
 | `GRAFANA_PASSWORD` | — | Mot de passe Grafana |
-| `KEEP_API_BASE_URL` | — | Base de l'API Keep, incluant `/v2` (client préparatoire non utilisé par le workflow) |
+| `KEEP_API_BASE_URL` | — | URL racine de l'API Keep ; le Deployment utilise le service interne sans préfixe `/v2` |
 | `KEEP_API_KEY` | — | Clé API Keep, à conserver hors du dépôt |
 | `LOG_LEVEL` | `INFO` | Niveau de log |
 | `AUDIT_DIR` | `audit_logs` | Répertoire de l'audit trail |
 
-Le client Keep est préparé avec des appels testés pour retrouver une alerte par fingerprint,
-créer un incident, lui associer des alertes et ajouter une activité. Il n'est pas encore appelé
-par le workflow ; aucune requête Keep n'est faite par l'agent tant que l'authentification et les
-scopes nécessaires ne sont pas confirmés.
+Lorsque `KEEP_API_BASE_URL` et `KEEP_API_KEY` sont configurés, l'agent publie la pré-analyse
+après le diagnostic, réutilise l'incident Keep déjà lié aux fingerprints et associe les nouvelles
+alertes d'un groupe enrichi. Une notification `resolved` ajoute une activité de résolution sans
+clore automatiquement l'incident Keep. Les notifications résolues répétées sont dédupliquées côté
+agent en mémoire ; après redémarrage, l'état d'idempotence local est perdu. La publication Keep
+est best-effort : un échec est tracé et ne bloque ni l'acquittement Alertmanager ni le rapport
+local. Les tests unitaires utilisent un transport HTTP simulé ; l'intégration réelle doit être
+validée dans le cluster.
 
 ## Image Docker
 
@@ -163,8 +167,8 @@ Les identifiants utilisés par l'agent sont actuellement fournis par des Kuberne
 créés hors Git ; ils ne sont ni gérés ni synchronisés automatiquement par Flux depuis Grafana
 ou Keep. Le secret Grafana `grafana-credentials` est dans le namespace `ia4ops` et alimente
 `GRAFANA_USERNAME`/`GRAFANA_PASSWORD`. Le secret `model-garden-credentials` y fournit le
-compte de service Vertex AI. Un secret Keep pour l'agent sera ajouté si l'intégration Keep
-est activée ; le client Keep est préparé mais n'est pas encore appelé par le workflow.
+compte de service Vertex AI. Le secret Keep `ia4ops-agent-keep` fournit la clé API de l'agent. Le client s'en sert pour publier
+les pré-analyses et les activités de résolution ; la clé reste hors du dépôt Git.
 
 Un redémarrage de cluster ne fait pas nécessairement tourner les identifiants. En revanche,
 si Grafana ou Keep recrée/renouvelle ses identifiants (par exemple après une réinitialisation

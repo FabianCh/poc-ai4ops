@@ -32,6 +32,8 @@ from ia4ops_agent.api.models import (
     IncidentResponse,
 )
 from ia4ops_agent.audit.trace_logging import emit_trace_event
+from ia4ops_agent.integrations.keep import KeepAPIError
+from ia4ops_agent.integrations.keep_publisher import KeepPublisher
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +118,16 @@ async def receive_alertmanager_webhook(
             resolved_at=entry["resolved_at"],
         )
         logger.info("Incident résolu par Alertmanager. incident_id=%s", incident_id)
+        keep_publisher = getattr(app_state, "keep_publisher", None)
+        if keep_publisher is not None:
+            background_tasks.add_task(
+                _publish_keep_resolution,
+                publisher=keep_publisher,
+                incident_id=incident_id,
+                dedup_key=dedup_key,
+                fingerprints=[alert.fingerprint for alert in payload.alerts],
+                resolved_at=entry["resolved_at"],
+            )
         return AlertResolved(
             incident_id=incident_id,
             status="resolved",
@@ -168,6 +180,7 @@ async def receive_alertmanager_webhook(
         "incident_id": incident_id,
         "status": "pending",
         "alert_status": payload.status,
+        "dedup_key": dedup_key,
         "resolved_at": None,
         "received_at": received_at,
         "report": None,
@@ -280,6 +293,9 @@ async def _run_graph(
             "incident_id": final_incident_id,
             "status": status,
             "received_at": store.get(incident_id, {}).get("received_at"),
+            "alert_status": store.get(incident_id, {}).get("alert_status"),
+            "dedup_key": store.get(incident_id, {}).get("dedup_key"),
+            "resolved_at": store.get(incident_id, {}).get("resolved_at"),
             "finalized_at": finalized_at,
             "report": report,
             "failure": None,
@@ -305,6 +321,33 @@ async def _run_graph(
             source_status=report.get("source_status", {}),
             action_executed=report.get("action_executed", False),
         )
+        keep_publisher = getattr(app_state, "keep_publisher", None)
+        if (
+            keep_publisher is not None
+            and status in {"completed", "completed_with_errors"}
+            and isinstance(report.get("diagnosis"), dict)
+        ):
+            await _publish_keep_diagnosis(
+                publisher=keep_publisher,
+                incident_id=final_incident_id,
+                payload=payload_dict,
+                report=report,
+                alert_status=entry["alert_status"] or "firing",
+                resolved_at=entry["resolved_at"],
+            )
+            if entry["alert_status"] == "resolved":
+                await _publish_keep_resolution(
+                    publisher=keep_publisher,
+                    incident_id=final_incident_id,
+                    dedup_key=entry["dedup_key"],
+                    fingerprints=[
+                        alert["fingerprint"]
+                        for alert in payload_dict.get("alerts", [])
+                        if isinstance(alert, dict)
+                        and isinstance(alert.get("fingerprint"), str)
+                    ],
+                    resolved_at=entry["resolved_at"],
+                )
 
     except Exception as exc:  # noqa: BLE001
         logger.exception("Erreur irrécupérable dans le graphe. incident_id=%s", incident_id)
@@ -319,3 +362,84 @@ async def _run_graph(
                 "status": "failed",
                 "failure": str(exc),
             }
+
+
+async def _publish_keep_diagnosis(
+    *,
+    publisher: KeepPublisher,
+    incident_id: str,
+    payload: dict,
+    report: dict,
+    alert_status: str,
+    resolved_at: str | None,
+) -> None:
+    try:
+        keep_incident_id = await publisher.publish_diagnosis(
+            agent_incident_id=incident_id,
+            payload=payload,
+            report=report,
+            alert_status=alert_status,
+            resolved_at=resolved_at,
+        )
+        emit_trace_event(
+            "keep_diagnosis_published",
+            incident_id,
+            keep_incident_id=keep_incident_id,
+        )
+        logger.info(
+            "Pré-analyse publiée dans Keep. incident_id=%s keep_incident_id=%s",
+            incident_id,
+            keep_incident_id,
+        )
+    except KeepAPIError as exc:
+        emit_trace_event(
+            "keep_publication_failed",
+            incident_id,
+            operation="diagnosis",
+            error_type=type(exc).__name__,
+            status_code=exc.status_code,
+        )
+        logger.error(
+            "Échec publication Keep (diagnosis). incident_id=%s error=%s",
+            incident_id,
+            exc,
+        )
+
+
+async def _publish_keep_resolution(
+    *,
+    publisher: KeepPublisher,
+    incident_id: str,
+    dedup_key: str,
+    fingerprints: list[str],
+    resolved_at: str | None,
+) -> None:
+    try:
+        keep_incident_ids = await publisher.publish_resolution(
+            dedup_key=dedup_key,
+            fingerprints=fingerprints,
+            resolved_at=resolved_at,
+        )
+        emit_trace_event(
+            "keep_resolution_published",
+            incident_id,
+            keep_incident_ids=keep_incident_ids,
+        )
+        logger.info(
+            "Résolution publiée dans Keep. incident_id=%s keep_incident_ids=%s",
+            incident_id,
+            keep_incident_ids,
+        )
+    except KeepAPIError as exc:
+        emit_trace_event(
+            "keep_publication_failed",
+            incident_id,
+            operation="resolution",
+            error_type=type(exc).__name__,
+            status_code=exc.status_code,
+        )
+        logger.error(
+            "Échec publication Keep (resolution). incident_id=%s error=%s",
+            incident_id,
+            exc,
+        )

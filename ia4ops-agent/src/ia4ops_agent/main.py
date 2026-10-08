@@ -20,6 +20,8 @@ from fastapi import FastAPI
 from ia4ops_agent.api.routes import router
 from ia4ops_agent.config import settings
 from ia4ops_agent.graph.builder import build_graph
+from ia4ops_agent.integrations.keep import KeepClient
+from ia4ops_agent.integrations.keep_publisher import KeepPublisher
 from ia4ops_agent.llm.interface import FakeLLMClient
 from ia4ops_agent.providers.factory import Providers
 
@@ -82,6 +84,14 @@ async def lifespan(app: FastAPI):
     app.state.incident_store: dict = {}
     app.state.dedup_cache: OrderedDict = OrderedDict()
     app.state.dedup_cache_max_size: int = settings.dedup_cache_max_size
+    app.state.keep_publisher = None
+    if settings.keep_api_base_url and settings.keep_api_key:
+        app.state.keep_publisher = KeepPublisher(KeepClient.from_settings())
+        logger.info("Keep publisher initialized.")
+    elif settings.keep_api_base_url or settings.keep_api_key:
+        logger.warning(
+            "Keep integration disabled: configure both KEEP_API_BASE_URL and KEEP_API_KEY."
+        )
 
     logger.info("Application prête. Écoute sur %s:%s", settings.host, settings.port)
 

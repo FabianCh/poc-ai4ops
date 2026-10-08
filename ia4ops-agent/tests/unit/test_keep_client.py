@@ -110,6 +110,7 @@ async def test_api_error_does_not_include_api_key() -> None:
         await client.get_alert("fp-123")
 
     assert "test-api-key" not in str(error.value)
+    assert error.value.status_code == 403
 
 
 async def test_unexpected_response_shape_is_reported() -> None:

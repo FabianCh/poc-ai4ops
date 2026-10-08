@@ -18,6 +18,10 @@ class KeepConfigurationError(ValueError):
 class KeepAPIError(RuntimeError):
     """Keep API request or response failed."""
 
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
 
 class KeepClient:
     """Calls selected Keep API endpoints using an API key in X-API-KEY."""
@@ -147,7 +151,8 @@ class KeepClient:
                 if response.status_code != expected_status:
                     raise KeepAPIError(
                         f"Keep API {method} {path} returned HTTP {response.status_code}; "
-                        f"expected {expected_status}."
+                        f"expected {expected_status}.",
+                        status_code=response.status_code,
                     )
                 payload = response.json()
         except httpx.HTTPError as exc:

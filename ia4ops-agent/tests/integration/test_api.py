@@ -21,9 +21,12 @@ import asyncio
 from collections.abc import AsyncGenerator
 from typing import Any
 
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
+from ia4ops_agent.config import settings
+from ia4ops_agent.integrations.keep import KeepAPIError
 from ia4ops_agent.main import app
 
 # ---------------------------------------------------------------------------
@@ -32,13 +35,15 @@ from ia4ops_agent.main import app
 
 
 @pytest_asyncio.fixture
-async def client() -> AsyncGenerator[AsyncClient]:
+async def client(monkeypatch: pytest.MonkeyPatch) -> AsyncGenerator[AsyncClient]:
     """
     Client ASGI qui démarre et arrête le lifespan FastAPI.
 
     Utilise app.router.lifespan_context pour déclencher le lifespan
     (app.state.graph, incident_store, dedup_cache sont initialisés).
     """
+    monkeypatch.setattr(settings, "keep_api_base_url", None)
+    monkeypatch.setattr(settings, "keep_api_key", None)
     async with app.router.lifespan_context(app):
         async with AsyncClient(
             transport=ASGITransport(app=app),
@@ -380,6 +385,93 @@ async def test_report_always_has_action_executed_false(client: AsyncClient) -> N
         assert diagnosis.get("action_executed") is False, (
             f"diagnosis.action_executed True pour {service}"
         )
+
+
+async def test_completed_diagnosis_is_sent_to_keep(client: AsyncClient) -> None:
+    """A completed report is published once through the configured Keep publisher."""
+    calls: list[dict[str, Any]] = []
+
+    class RecordingPublisher:
+        async def publish_diagnosis(self, **kwargs: Any) -> str:
+            calls.append(kwargs)
+            return "keep-incident-1"
+
+    app.state.keep_publisher = RecordingPublisher()
+    payload = _alert_payload("product-catalog", "test-fp-keep-publish")
+
+    response = await client.post("/webhooks/alertmanager", json=payload)
+    incident_id = response.json()["incident_id"]
+    await _wait_for_completion(client, incident_id)
+
+    assert len(calls) == 1
+    assert calls[0]["agent_incident_id"] == incident_id
+    assert calls[0]["payload"]["alerts"][0]["fingerprint"] == "test-fp-keep-publish"
+    assert calls[0]["alert_status"] == "firing"
+    assert calls[0]["report"]["action_executed"] is False
+
+
+async def test_keep_failure_does_not_fail_local_diagnosis(
+    client: AsyncClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A Keep API error is visible in logs but does not change the local report status."""
+
+    class FailingPublisher:
+        async def publish_diagnosis(self, **kwargs: Any) -> str:
+            raise KeepAPIError("Keep API returned HTTP 403.", status_code=403)
+
+    app.state.keep_publisher = FailingPublisher()
+    response = await client.post(
+        "/webhooks/alertmanager",
+        json=_alert_payload("product-catalog", "test-fp-keep-failure"),
+    )
+    incident_id = response.json()["incident_id"]
+
+    result = await _wait_for_completion(client, incident_id)
+
+    assert result["status"] in {"completed", "completed_with_errors"}
+    assert "Échec publication Keep (diagnosis)" in caplog.text
+
+
+async def test_repeated_resolved_webhooks_use_the_same_keep_idempotency_key(
+    client: AsyncClient,
+) -> None:
+    """A matched resolution carries a stable key so KeepPublisher can suppress repeats."""
+    calls: list[dict[str, Any]] = []
+
+    class RecordingPublisher:
+        async def publish_diagnosis(self, **kwargs: Any) -> str:
+            return "keep-incident-1"
+
+        async def publish_resolution(self, **kwargs: Any) -> list[str]:
+            calls.append(kwargs)
+            return ["keep-incident-1"]
+
+    app.state.keep_publisher = RecordingPublisher()
+    payload = _alert_payload("product-catalog", "test-fp-keep-resolved")
+    firing_response = await client.post("/webhooks/alertmanager", json=payload)
+    incident_id = firing_response.json()["incident_id"]
+    await _wait_for_completion(client, incident_id)
+    resolved_payload = {
+        **payload,
+        "status": "resolved",
+        "alerts": [
+            {
+                **payload["alerts"][0],
+                "status": "resolved",
+                "endsAt": "2026-10-08T10:00:00Z",
+            }
+        ],
+    }
+
+    first = await client.post("/webhooks/alertmanager", json=resolved_payload)
+    repeated = await client.post("/webhooks/alertmanager", json=resolved_payload)
+
+    assert first.json()["status"] == "resolved"
+    assert repeated.json()["status"] == "resolved"
+    assert len(calls) == 2
+    assert calls[0]["dedup_key"] == calls[1]["dedup_key"]
+    assert calls[0]["resolved_at"] == "2026-10-08T10:00:00+00:00"
 
 
 # ---------------------------------------------------------------------------
