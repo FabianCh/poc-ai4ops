@@ -1,6 +1,6 @@
 ---
 # Agent IA de diagnostic (lecture seule) : reçoit les webhooks Alertmanager.
-# LLM conservé en mock ; métriques et logs collectés via Grafana.
+# Gemini sélectionné pour le prochain test ; métriques et logs collectés via Grafana.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -33,7 +33,7 @@ spec:
         image: ghcr.io/fabianch/poc-ai4ops/ia4ops-agent
         env:
         - name: LLM_PROVIDER
-          value: mock
+          value: gemini
         - name: DATA_PROVIDER
           value: real
         - name: GRAFANA_BASE_URL
