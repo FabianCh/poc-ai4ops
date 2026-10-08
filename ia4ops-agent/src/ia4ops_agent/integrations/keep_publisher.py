@@ -161,8 +161,16 @@ class KeepPublisher:
         payload: dict[str, Any],
         diagnosis: dict[str, Any],
     ) -> str:
-        service = str(diagnosis.get("affected_service") or "unknown-service")
-        summary = str(diagnosis.get("summary") or "IA4Ops pre-analysis")
+        service = diagnosis.get("affected_service")
+        if not isinstance(service, str) or not service:
+            service = _service_from_payload(payload) or "unknown-service"
+        summary = diagnosis.get("summary")
+        if not isinstance(summary, str) or not summary:
+            summary = (
+                "IA4Ops diagnostic unavailable"
+                if diagnosis.get("failure_reason")
+                else "IA4Ops pre-analysis"
+            )
         response = await self._client.create_incident(
             name=f"IA4Ops {service} {agent_incident_id}",
             summary=summary[:500],
@@ -219,6 +227,22 @@ def _keep_activity_status(alert_status: str) -> IncidentActivityStatus:
     return "resolved" if alert_status == "resolved" else "firing"
 
 
+def _service_from_payload(payload: dict[str, Any]) -> str | None:
+    alerts = payload.get("alerts")
+    if not isinstance(alerts, list):
+        return None
+    for alert in alerts:
+        if not isinstance(alert, dict):
+            continue
+        labels = alert.get("labels")
+        if not isinstance(labels, dict):
+            continue
+        service = labels.get("service_name") or labels.get("service")
+        if isinstance(service, str) and service.strip():
+            return service.strip()
+    return None
+
+
 def _diagnosis_comments(
     *,
     agent_incident_id: str,
@@ -227,6 +251,39 @@ def _diagnosis_comments(
     alert_status: str,
     resolved_at: str | None,
 ) -> list[str]:
+    source_labels = {
+        "metrics": "métriques",
+        "logs": "logs",
+        "cluster": "Kubernetes",
+    }
+    if isinstance(source_status, dict) and source_status:
+        sources = ", ".join(
+            f"{source_labels.get(name, name)} : {status}"
+            for name, status in sorted(source_status.items())
+        )
+    else:
+        sources = "indisponible"
+
+    failure_reason = diagnosis.get("failure_reason")
+    if isinstance(failure_reason, str) and failure_reason.strip():
+        attempts = diagnosis.get("attempts")
+        attempt_text = (
+            f"{attempts} tentative(s)"
+            if isinstance(attempts, int) and not isinstance(attempts, bool)
+            else "plusieurs tentatives"
+        )
+        reason = _display_text(failure_reason, "Erreur non détaillée.", 500)
+        return [
+            (
+                f"IA4Ops — Diagnostic indisponible ({agent_incident_id})\n"
+                f"Le modèle n'a pas produit de diagnostic valide après {attempt_text}.\n"
+                f"Détail : {reason}\n"
+                f"Collecte : {sources}\n"
+                "Aucune hypothèse fiable n'est publiée. "
+                "Aucune action de remédiation n'a été exécutée."
+            )
+        ]
+
     hypothesis = diagnosis.get("primary_hypothesis")
     if not isinstance(hypothesis, dict):
         hypothesis = {}
@@ -275,18 +332,6 @@ def _diagnosis_comments(
 
     missing = _text_list(diagnosis.get("missing_information"), limit=5, item_length=300)
     next_checks = _text_list(diagnosis.get("recommended_next_checks"), limit=5, item_length=300)
-    source_labels = {
-        "metrics": "métriques",
-        "logs": "logs",
-        "cluster": "Kubernetes",
-    }
-    if isinstance(source_status, dict) and source_status:
-        sources = ", ".join(
-            f"{source_labels.get(name, name)} : {status}"
-            for name, status in sorted(source_status.items())
-        )
-    else:
-        sources = "indisponible"
     context_lines = [
         f"IA4Ops — Limites et prochaines étapes ({agent_incident_id})",
         f"Collecte : {sources}",

@@ -214,6 +214,10 @@ class GeminiVertexClient:
                     "Validation Pydantic échouée. attempt=%d/%d : %s",
                     attempt, MAX_ATTEMPTS, str(exc)[:200],
                 )
+                if attempt < MAX_ATTEMPTS:
+                    messages.append(
+                        HumanMessage(content=_validation_correction_message(exc))
+                    )
 
             except Exception as exc:  # noqa: BLE001
                 error_msg = str(exc)[:500]
@@ -259,3 +263,22 @@ class GeminiVertexClient:
             reason=f"Échec après {MAX_ATTEMPTS} tentatives : {last_error}",
             attempts=MAX_ATTEMPTS,
         )
+
+
+def _validation_correction_message(exc: ValidationError) -> str:
+    """Ask the model to repair schema violations without echoing its raw response."""
+    details = []
+    for error in exc.errors(include_input=False)[:10]:
+        location = ".".join(str(part) for part in error["loc"]) or "diagnostic"
+        details.append(f"- {location}: {error['msg']}")
+    if not details:
+        details.append("- La réponse ne respecte pas le schéma de diagnostic.")
+
+    return (
+        "La réponse précédente n'a pas passé la validation. Corrige uniquement les erreurs "
+        "ci-dessous et retourne un diagnostic complet conforme au schéma.\n"
+        + "\n".join(details)
+        + "\nChaque hypothèse doit référencer au moins une preuve existant dans evidence ; "
+        "recopie exactement une valeur de evidence.reference dans evidence_refs. "
+        "N'invente pas de preuve et omets toute hypothèse alternative non étayée."
+    )[:2000]

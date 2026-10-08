@@ -122,7 +122,9 @@ HTTP simulé ; l'intégration réelle doit être validée dans le cluster.
 Le diagnostic est publié comme trois activités texte distinctes : résumé, hypothèse avec
 raisonnement et preuves, puis limites et vérifications suggérées. Cela évite de dépendre du rendu
 Markdown dans Keep. Le rendu et l'ordre des activités restent à confirmer dans l'interface après
-déploiement.
+déploiement. Si Gemini renvoie une réponse invalide, l'agent réinjecte les erreurs de validation
+dans sa tentative suivante. Si aucune réponse ne passe la validation, Keep reçoit une activité
+unique indiquant clairement l'échec plutôt qu'un résumé ou une hypothèse vide.
 
 ## Image Docker
 

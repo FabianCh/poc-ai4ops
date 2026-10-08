@@ -98,6 +98,61 @@ async def test_publishes_diagnosis_and_all_alerts_to_one_keep_incident() -> None
     assert "Aucune action de remédiation n'a été exécutée." in comments[2]
 
 
+async def test_failed_diagnosis_publishes_clear_failure_activity() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.method == "GET":
+            return httpx.Response(200, json={"incident": ""}, request=request)
+        if request.url.path == "/incidents":
+            body = json.loads(request.content)
+            assert body["user_generated_name"] == "IA4Ops product-catalog agent-inc-1"
+            assert body["user_summary"] == "IA4Ops diagnostic unavailable"
+            return httpx.Response(202, json={"id": "keep-failure"}, request=request)
+        if request.url.path.endswith("/alerts"):
+            return httpx.Response(202, content=b"", request=request)
+        if request.url.path == "/incidents/keep-failure/comment":
+            return httpx.Response(200, json={"action": "comment"}, request=request)
+        pytest.fail(f"Unexpected request: {request.method} {request.url}")
+
+    publisher = KeepPublisher(
+        KeepClient(
+            base_url="http://keep-backend:8080",
+            api_key="test-key",
+            transport=httpx.MockTransport(handler),
+        )
+    )
+    report = {
+        "diagnosis": {
+            "failure_reason": "Échec de validation Pydantic après 3 tentatives.",
+            "attempts": 3,
+            "action_executed": False,
+        },
+        "source_status": {"metrics": "success", "logs": "success", "cluster": "unavailable"},
+    }
+
+    await publisher.publish_diagnosis(
+        agent_incident_id="agent-inc-1",
+        payload=_payload("fp-a"),
+        report=report,
+    )
+
+    comments = [
+        json.loads(request.content)["comment"]
+        for request in requests
+        if request.url.path == "/incidents/keep-failure/comment"
+    ]
+    assert len(comments) == 1
+    assert "Diagnostic indisponible" in comments[0]
+    assert "3 tentative(s)" in comments[0]
+    assert "Échec de validation Pydantic" in comments[0]
+    assert "Kubernetes : unavailable" in comments[0]
+    assert "Aucune hypothèse fiable n'est publiée." in comments[0]
+    assert "Résumé du diagnostic" not in comments[0]
+    assert "Hypothèse principale" not in comments[0]
+
+
 def test_diagnosis_comments_include_evidence_and_next_checks() -> None:
     from ia4ops_agent.integrations.keep_publisher import _diagnosis_comments
 
