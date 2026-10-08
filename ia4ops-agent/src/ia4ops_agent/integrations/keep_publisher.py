@@ -1,13 +1,21 @@
 """Publish read-only IA4Ops analyses and alert lifecycle updates to Keep."""
 
 import asyncio
+from datetime import datetime
 from typing import Any
 
+from ia4ops_agent.config import settings
+from ia4ops_agent.domain.alerts import service_from_labels
 from ia4ops_agent.integrations.keep import (
     IncidentActivityStatus,
     IncidentSeverity,
     KeepAPIError,
     KeepClient,
+)
+from ia4ops_agent.integrations.keep_html import (
+    build_comments,
+    build_resolution_comment,
+    grafana_logs_url,
 )
 
 _SEVERITY_MAP: dict[str, IncidentSeverity] = {
@@ -85,13 +93,17 @@ class KeepPublisher:
                 await self._client.add_alerts_to_incident(keep_incident_id, unattached)
             self._associated_fingerprints.update(fingerprints)
 
-            for comment in _diagnosis_comments(
+            # Keep affiche les activités du plus récent au plus ancien : on poste dans l'ordre
+            # inverse de lecture (limites, hypothèse, résumé) pour que l'écran lise l'inverse.
+            comments = build_comments(
                 agent_incident_id=agent_incident_id,
                 diagnosis=diagnosis,
                 source_status=report.get("source_status", {}),
                 alert_status=alert_status,
                 resolved_at=resolved_at,
-            ):
+                links=_investigation_links(payload, resolved_at=resolved_at),
+            )
+            for comment in reversed(comments):
                 await self._client.add_comment(
                     keep_incident_id,
                     comment=comment,
@@ -129,8 +141,7 @@ class KeepPublisher:
             if not incident_ids:
                 raise KeepAPIError("Resolved alerts are not associated with a Keep incident.")
 
-            timestamp = f" at {resolved_at}" if resolved_at else ""
-            comment = f"Alertmanager reports this alert group as resolved{timestamp}."
+            comment = build_resolution_comment(resolved_at)
             for incident_id in sorted(incident_ids):
                 await self._client.add_comment(
                     incident_id,
@@ -172,7 +183,7 @@ class KeepPublisher:
                 else "IA4Ops pre-analysis"
             )
         response = await self._client.create_incident(
-            name=f"IA4Ops {service} {agent_incident_id}",
+            name=_incident_name(payload, service, agent_incident_id),
             summary=summary[:500],
             severity=_severity(diagnosis, payload),
         )
@@ -232,136 +243,64 @@ def _service_from_payload(payload: dict[str, Any]) -> str | None:
     if not isinstance(alerts, list):
         return None
     for alert in alerts:
-        if not isinstance(alert, dict):
-            continue
-        labels = alert.get("labels")
-        if not isinstance(labels, dict):
-            continue
-        service = labels.get("service_name") or labels.get("service")
-        if isinstance(service, str) and service.strip():
-            return service.strip()
+        labels = alert.get("labels") if isinstance(alert, dict) else None
+        if isinstance(labels, dict) and (service := service_from_labels(labels)):
+            return service
     return None
 
 
-def _diagnosis_comments(
-    *,
-    agent_incident_id: str,
-    diagnosis: dict[str, Any],
-    source_status: Any,
-    alert_status: str,
-    resolved_at: str | None,
-) -> list[str]:
-    source_labels = {
-        "metrics": "métriques",
-        "logs": "logs",
-        "cluster": "Kubernetes",
-    }
-    if isinstance(source_status, dict) and source_status:
-        sources = ", ".join(
-            f"{source_labels.get(name, name)} : {status}"
-            for name, status in sorted(source_status.items())
-        )
-    else:
-        sources = "indisponible"
+def _first_label(payload: dict[str, Any], name: str) -> str | None:
+    alerts = payload.get("alerts")
+    if not isinstance(alerts, list):
+        return None
+    for alert in alerts:
+        labels = alert.get("labels") if isinstance(alert, dict) else None
+        value = labels.get(name) if isinstance(labels, dict) else None
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
 
-    failure_reason = diagnosis.get("failure_reason")
-    if isinstance(failure_reason, str) and failure_reason.strip():
-        attempts = diagnosis.get("attempts")
-        attempt_text = (
-            f"{attempts} tentative(s)"
-            if isinstance(attempts, int) and not isinstance(attempts, bool)
-            else "plusieurs tentatives"
-        )
-        reason = _display_text(failure_reason, "Erreur non détaillée.", 500)
-        return [
-            (
-                f"IA4Ops — Diagnostic indisponible ({agent_incident_id})\n"
-                f"Le modèle n'a pas produit de diagnostic valide après {attempt_text}.\n"
-                f"Détail : {reason}\n"
-                f"Collecte : {sources}\n"
-                "Aucune hypothèse fiable n'est publiée. "
-                "Aucune action de remédiation n'a été exécutée."
-            )
-        ]
 
-    hypothesis = diagnosis.get("primary_hypothesis")
-    if not isinstance(hypothesis, dict):
-        hypothesis = {}
+def _incident_name(payload: dict[str, Any], service: str, agent_incident_id: str) -> str:
+    """Nom lisible dans la liste des incidents : « <alerte> — <service> (<id agent>) »."""
+    alertname = _first_label(payload, "alertname")
+    prefix = f"{alertname} — {service}" if alertname else f"IA4Ops {service}"
+    return f"{prefix} ({agent_incident_id})"
 
-    service = _display_text(diagnosis.get("affected_service"), "inconnu", 200)
-    severity = _display_text(diagnosis.get("severity_assessment"), "inconnue", 40)
-    alert = (
-        f"{alert_status} — {resolved_at}"
-        if alert_status == "resolved" and resolved_at
-        else alert_status
-    )
-    summary = _display_text(diagnosis.get("summary"), "Aucun résumé disponible.", 500)
-    comments = [
-        (
-            f"IA4Ops — Résumé du diagnostic ({agent_incident_id})\n"
-            f"Service : {service}\n"
-            f"Sévérité estimée : {severity}\n"
-            f"État de l'alerte : {alert}\n"
-            f"Résumé : {summary}"
-        )
+
+def _parse_time(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _investigation_links(
+    payload: dict[str, Any], *, resolved_at: str | None
+) -> list[tuple[str, str]]:
+    """Liens d'investigation (jamais bloquants) : logs du service dans Grafana Explore."""
+    if not settings.grafana_base_url:
+        return []
+    alerts = payload.get("alerts")
+    starts = [
+        parsed
+        for alert in (alerts if isinstance(alerts, list) else [])
+        if isinstance(alert, dict) and (parsed := _parse_time(alert.get("startsAt"))) is not None
     ]
-
-    hypothesis_title = _display_text(hypothesis.get("title"), "Non déterminée", 200)
-    likelihood = _display_text(hypothesis.get("likelihood"), "inconnue", 20)
-    reasoning = _display_text(hypothesis.get("reasoning"), "", 1000)
-    hypothesis_section = (
-        f"IA4Ops — Hypothèse principale : {hypothesis_title} "
-        f"(confiance : {likelihood})"
-    )
-    if reasoning:
-        hypothesis_section += f"\nRaisonnement : {reasoning}"
-
-    evidence = diagnosis.get("evidence")
-    if isinstance(evidence, list) and evidence:
-        evidence_lines = []
-        for item in evidence[:8]:
-            if not isinstance(item, dict):
-                continue
-            source = _display_text(item.get("source"), "observation", 40)
-            observation = _display_text(item.get("observation"), "", 400)
-            if observation:
-                evidence_lines.append(f"- {source} : {observation}")
-        if evidence_lines:
-            hypothesis_section += "\nÉléments observés :\n" + "\n".join(evidence_lines)
-    comments.append(hypothesis_section)
-
-    missing = _text_list(diagnosis.get("missing_information"), limit=5, item_length=300)
-    next_checks = _text_list(diagnosis.get("recommended_next_checks"), limit=5, item_length=300)
-    context_lines = [
-        f"IA4Ops — Limites et prochaines étapes ({agent_incident_id})",
-        f"Collecte : {sources}",
-    ]
-    if missing:
-        missing_text = "\n".join(f"- {item}" for item in missing)
-        context_lines.append(f"Informations manquantes :\n{missing_text}")
-    if next_checks:
-        context_lines.append(
-            "Vérifications suggérées :\n"
-            + "\n".join(f"{index}. {item}" for index, item in enumerate(next_checks, start=1))
-        )
-    context_lines.append("Aucune action de remédiation n'a été exécutée.")
-    comments.append("\n".join(context_lines))
-    return comments
-
-
-def _display_text(value: Any, fallback: str, limit: int) -> str:
-    """Normalize an LLM-provided display value and keep the activity bounded."""
-    if not isinstance(value, str):
-        return fallback
-    normalized = " ".join(value.split())
-    return normalized[:limit] if normalized else fallback
-
-
-def _text_list(value: Any, *, limit: int, item_length: int) -> list[str]:
-    if not isinstance(value, list):
+    namespace = _first_label(payload, "namespace")
+    if not starts or not namespace:
         return []
     return [
-        _display_text(item, "", item_length)
-        for item in value[:limit]
-        if isinstance(item, str) and item.strip()
+        (
+            "Logs du service dans Grafana",
+            grafana_logs_url(
+                settings.grafana_base_url,
+                namespace=namespace,
+                service=_service_from_payload(payload),
+                start=min(starts),
+                end=_parse_time(resolved_at),
+            ),
+        )
     ]

@@ -119,12 +119,19 @@ est best-effort : un échec est tracé et ne bloque ni l'acquittement Alertmanag
 local. L'association des alertes traite le `202 Accepted` comme un acquittement ; le corps de
 réponse de cet endpoint n'est pas requis par l'agent. Les tests unitaires utilisent un transport
 HTTP simulé ; l'intégration réelle doit être validée dans le cluster.
-Le diagnostic est publié comme trois activités texte distinctes : résumé, hypothèse avec
-raisonnement et preuves, puis limites et vérifications suggérées. Cela évite de dépendre du rendu
-Markdown dans Keep. Le rendu et l'ordre des activités restent à confirmer dans l'interface après
-déploiement. Si Gemini renvoie une réponse invalide, l'agent réinjecte les erreurs de validation
-dans sa tentative suivante. Si aucune réponse ne passe la validation, Keep reçoit une activité
-unique indiquant clairement l'échec plutôt qu'un résumé ou une hypothèse vide.
+Le diagnostic est publié comme trois activités HTML distinctes : résumé (tableau service, sévérité,
+état), hypothèse avec raisonnement, preuves et lien vers les logs du service dans Grafana
+(`GRAFANA_BASE_URL`), puis limites et vérifications suggérées. Format imposé par le rendu de Keep
+0.54.3 (`integrations/keep_html.py`) : une activité n'est rendue en HTML (listes, tableaux, liens)
+que si elle commence par `<p>`, sinon retours à la ligne et tabulations sont réduits à des espaces ;
+Markdown n'est pas interprété. Tout texte venant du LLM, des logs ou des labels est échappé ; seules
+les balises `p`, `strong`, `em`, `ul`, `ol`, `li`, `table` et `a` (http/https) sont émises. Keep affiche
+les activités du plus récent au plus ancien : elles sont postées dans l'ordre inverse (limites,
+hypothèse, résumé) pour s'afficher dans le sens de lecture. L'incident est nommé
+`<alerte> — <service> (<id agent>)` ; le service des alertes de conteneur (CPU, mémoire, OOM) est
+déduit des labels `container` puis `pod`. Si Gemini renvoie une réponse invalide, l'agent réinjecte
+les erreurs de validation dans sa tentative suivante. Si aucune réponse ne passe la validation, Keep
+reçoit une activité unique indiquant clairement l'échec plutôt qu'un résumé ou une hypothèse vide.
 
 ## Image Docker
 

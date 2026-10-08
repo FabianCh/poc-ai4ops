@@ -48,7 +48,7 @@ async def test_publishes_diagnosis_and_all_alerts_to_one_keep_incident() -> None
             return httpx.Response(200, json={"incident": ""}, request=request)
         if request.url.path == "/incidents":
             assert json.loads(request.content) == {
-                "user_generated_name": "IA4Ops product-catalog agent-inc-1",
+                "user_generated_name": "HighErrorRate — product-catalog (agent-inc-1)",
                 "user_summary": "Elevated request errors.",
                 "severity": "critical",
             }
@@ -90,12 +90,14 @@ async def test_publishes_diagnosis_and_all_alerts_to_one_keep_incident() -> None
         if request.url.path == "/incidents/keep-1/comment"
     ]
     assert len(comments) == 3
-    assert "Résumé du diagnostic" in comments[0]
-    assert "Elevated request errors." in comments[0]
+    # Keep affiche du plus récent au plus ancien : publication dans l'ordre inverse de lecture.
+    assert "Limites et prochaines étapes" in comments[0]
+    assert "Aucune action de remédiation n'a été exécutée." in comments[0]
     assert "Hypothèse principale" in comments[1]
     assert "Dependency timeout" in comments[1]
-    assert "Limites et prochaines étapes" in comments[2]
-    assert "Aucune action de remédiation n'a été exécutée." in comments[2]
+    assert "Résumé du diagnostic" in comments[2]
+    assert "Elevated request errors." in comments[2]
+    assert all(comment.startswith("<p>") for comment in comments)
 
 
 async def test_failed_diagnosis_publishes_clear_failure_activity() -> None:
@@ -107,7 +109,7 @@ async def test_failed_diagnosis_publishes_clear_failure_activity() -> None:
             return httpx.Response(200, json={"incident": ""}, request=request)
         if request.url.path == "/incidents":
             body = json.loads(request.content)
-            assert body["user_generated_name"] == "IA4Ops product-catalog agent-inc-1"
+            assert body["user_generated_name"] == "HighErrorRate — product-catalog (agent-inc-1)"
             assert body["user_summary"] == "IA4Ops diagnostic unavailable"
             return httpx.Response(202, json={"id": "keep-failure"}, request=request)
         if request.url.path.endswith("/alerts"):
@@ -154,7 +156,7 @@ async def test_failed_diagnosis_publishes_clear_failure_activity() -> None:
 
 
 def test_diagnosis_comments_include_evidence_and_next_checks() -> None:
-    from ia4ops_agent.integrations.keep_publisher import _diagnosis_comments
+    from ia4ops_agent.integrations.keep_html import build_comments
 
     diagnosis = {
         **_report()["diagnosis"],
@@ -179,7 +181,7 @@ def test_diagnosis_comments_include_evidence_and_next_checks() -> None:
         "recommended_next_checks": ["Vérifier les traces en erreur dans Jaeger."],
     }
 
-    comments = _diagnosis_comments(
+    comments = build_comments(
         agent_incident_id="agent-inc-1",
         diagnosis=diagnosis,
         source_status={"metrics": "success", "logs": "success", "cluster": "unavailable"},
@@ -188,11 +190,12 @@ def test_diagnosis_comments_include_evidence_and_next_checks() -> None:
     )
 
     assert len(comments) == 3
-    assert "Hypothèse principale : Taux d'erreurs élevé" in comments[1]
-    assert "Les erreurs dépassent le seuil observé." in comments[1]
-    assert "- metrics : Taux d'erreur mesuré à 2.93%." in comments[1]
-    assert "Aucun log ERROR/WARN trouvé." in comments[1]
-    assert "Vérifier les traces en erreur dans Jaeger." in comments[2]
+    hypothesis = comments[1].replace("&#x27;", "'")
+    assert "Hypothèse principale</strong> : Taux d'erreurs élevé" in hypothesis
+    assert "Les erreurs dépassent le seuil observé." in hypothesis
+    assert "<li><strong>metrics</strong> : Taux d'erreur mesuré à 2.93%.</li>" in hypothesis
+    assert "Aucun log ERROR/WARN trouvé." in hypothesis
+    assert "<ol><li>Vérifier les traces en erreur dans Jaeger.</li></ol>" in comments[2]
     assert "Kubernetes : unavailable" in comments[2]
 
 
@@ -319,3 +322,120 @@ async def test_resolution_is_published_once_and_does_not_create_an_incident() ->
     assert published == ["keep-existing"]
     assert repeated == []
     assert sum(request.method == "POST" for request in requests) == 1
+
+
+def _recording_publisher(
+    comments: list[str], names: list[str], incident: str = ""
+) -> KeepPublisher:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(200, json={"incident": incident}, request=request)
+        if request.url.path == "/incidents":
+            names.append(json.loads(request.content)["user_generated_name"])
+            return httpx.Response(202, json={"id": "keep-1"}, request=request)
+        if request.url.path.endswith("/alerts"):
+            return httpx.Response(202, content=b"", request=request)
+        comments.append(json.loads(request.content)["comment"])
+        return httpx.Response(200, json={"action": "comment"}, request=request)
+
+    return KeepPublisher(
+        KeepClient(
+            base_url="http://keep-backend:8080",
+            api_key="test-key",
+            transport=httpx.MockTransport(handler),
+        )
+    )
+
+
+def _container_payload() -> dict[str, Any]:
+    return {
+        "alerts": [
+            {
+                "fingerprint": "fp-cpu",
+                "startsAt": "2026-10-08T10:00:00Z",
+                "labels": {
+                    "alertname": "OtelDemoContainerHighCpu",
+                    "namespace": "otel-demo",
+                    "pod": "ad-544b5478f8-g8f87",
+                    "container": "ad",
+                    "severity": "warning",
+                },
+            }
+        ]
+    }
+
+
+async def test_container_alert_names_the_incident_after_its_container() -> None:
+    comments: list[str] = []
+    names: list[str] = []
+    report = {
+        "diagnosis": {"summary": "CPU élevé.", "primary_hypothesis": {"title": "Charge"}},
+        "source_status": {},
+    }
+
+    await _recording_publisher(comments, names).publish_diagnosis(
+        agent_incident_id="agent-inc-2",
+        payload=_container_payload(),
+        report=report,
+    )
+
+    assert names == ["OtelDemoContainerHighCpu — ad (agent-inc-2)"]
+
+
+async def test_incident_name_falls_back_without_alertname() -> None:
+    names: list[str] = []
+    payload = _payload("fp-a")
+    del payload["alerts"][0]["labels"]["alertname"]
+
+    await _recording_publisher([], names).publish_diagnosis(
+        agent_incident_id="agent-inc-3", payload=payload, report=_report()
+    )
+
+    assert names == ["IA4Ops product-catalog (agent-inc-3)"]
+
+
+async def test_hypothesis_links_to_grafana_logs_when_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from ia4ops_agent.config import settings
+
+    monkeypatch.setattr(settings, "grafana_base_url", "https://grafana.example")
+    comments: list[str] = []
+
+    await _recording_publisher(comments, []).publish_diagnosis(
+        agent_incident_id="agent-inc-4",
+        payload=_container_payload(),
+        report=_report(),
+    )
+
+    hypothesis = next(comment for comment in comments if "Hypothèse principale" in comment)
+    assert '<a href="https://grafana.example/explore?' in hypothesis
+    assert "Logs du service dans Grafana" in hypothesis
+
+
+async def test_no_grafana_link_without_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ia4ops_agent.config import settings
+
+    monkeypatch.setattr(settings, "grafana_base_url", None)
+    comments: list[str] = []
+
+    await _recording_publisher(comments, []).publish_diagnosis(
+        agent_incident_id="agent-inc-5", payload=_container_payload(), report=_report()
+    )
+
+    assert all("<a " not in comment for comment in comments)
+
+
+async def test_resolution_comment_is_html() -> None:
+    comments: list[str] = []
+
+    await _recording_publisher(comments, [], incident="keep-existing").publish_resolution(
+        dedup_key="group:starts-html",
+        fingerprints=["fp-a"],
+        resolved_at="2026-10-08T10:00:00+00:00",
+    )
+
+    assert len(comments) == 1
+    assert comments[0].startswith("<p>")
+    assert "Alerte résolue" in comments[0]
+    assert "2026-10-08T10:00:00+00:00" in comments[0]
