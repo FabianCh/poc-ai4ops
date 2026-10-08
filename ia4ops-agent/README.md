@@ -119,6 +119,10 @@ est best-effort : un échec est tracé et ne bloque ni l'acquittement Alertmanag
 local. L'association des alertes traite le `202 Accepted` comme un acquittement ; le corps de
 réponse de cet endpoint n'est pas requis par l'agent. Les tests unitaires utilisent un transport
 HTTP simulé ; l'intégration réelle doit être validée dans le cluster.
+Le diagnostic est publié comme trois activités texte distinctes : résumé, hypothèse avec
+raisonnement et preuves, puis limites et vérifications suggérées. Cela évite de dépendre du rendu
+Markdown dans Keep. Le rendu et l'ordre des activités restent à confirmer dans l'interface après
+déploiement.
 
 ## Image Docker
 

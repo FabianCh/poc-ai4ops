@@ -59,8 +59,12 @@ async def test_publishes_diagnosis_and_all_alerts_to_one_keep_incident() -> None
         if request.url.path == "/incidents/keep-1/comment":
             body = json.loads(request.content)
             assert body["status"] == "firing"
-            assert "Dependency timeout" in body["comment"]
-            assert "No remediation action was executed." in body["comment"]
+            comments = [
+                json.loads(item.content)["comment"]
+                for item in requests
+                if item.url.path == "/incidents/keep-1/comment"
+            ]
+            assert len(comments) <= 3
             return httpx.Response(200, json={"action": "comment"}, request=request)
         pytest.fail(f"Unexpected request: {request.method} {request.url}")
 
@@ -80,6 +84,61 @@ async def test_publishes_diagnosis_and_all_alerts_to_one_keep_incident() -> None
 
     assert keep_id == "keep-1"
     assert sum(request.url.path == "/incidents" for request in requests) == 1
+    comments = [
+        json.loads(request.content)["comment"]
+        for request in requests
+        if request.url.path == "/incidents/keep-1/comment"
+    ]
+    assert len(comments) == 3
+    assert "Résumé du diagnostic" in comments[0]
+    assert "Elevated request errors." in comments[0]
+    assert "Hypothèse principale" in comments[1]
+    assert "Dependency timeout" in comments[1]
+    assert "Limites et prochaines étapes" in comments[2]
+    assert "Aucune action de remédiation n'a été exécutée." in comments[2]
+
+
+def test_diagnosis_comments_include_evidence_and_next_checks() -> None:
+    from ia4ops_agent.integrations.keep_publisher import _diagnosis_comments
+
+    diagnosis = {
+        **_report()["diagnosis"],
+        "primary_hypothesis": {
+            "title": "Taux d'erreurs élevé",
+            "likelihood": "high",
+            "reasoning": "Les erreurs dépassent le seuil observé.",
+        },
+        "evidence": [
+            {
+                "source": "metrics",
+                "reference": "metrics-error_rate",
+                "observation": "Taux d'erreur mesuré à 2.93%.",
+            },
+            {
+                "source": "logs",
+                "reference": "logs-errors",
+                "observation": "Aucun log ERROR/WARN trouvé.",
+            },
+        ],
+        "missing_information": ["L'état des workloads Kubernetes n'est pas collecté."],
+        "recommended_next_checks": ["Vérifier les traces en erreur dans Jaeger."],
+    }
+
+    comments = _diagnosis_comments(
+        agent_incident_id="agent-inc-1",
+        diagnosis=diagnosis,
+        source_status={"metrics": "success", "logs": "success", "cluster": "unavailable"},
+        alert_status="firing",
+        resolved_at=None,
+    )
+
+    assert len(comments) == 3
+    assert "Hypothèse principale : Taux d'erreurs élevé" in comments[1]
+    assert "Les erreurs dépassent le seuil observé." in comments[1]
+    assert "- metrics : Taux d'erreur mesuré à 2.93%." in comments[1]
+    assert "Aucun log ERROR/WARN trouvé." in comments[1]
+    assert "Vérifier les traces en erreur dans Jaeger." in comments[2]
+    assert "Kubernetes : unavailable" in comments[2]
 
 
 async def test_new_alert_in_later_group_reuses_keep_incident() -> None:

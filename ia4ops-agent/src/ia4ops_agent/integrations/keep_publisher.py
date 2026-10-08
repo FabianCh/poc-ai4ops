@@ -85,17 +85,18 @@ class KeepPublisher:
                 await self._client.add_alerts_to_incident(keep_incident_id, unattached)
             self._associated_fingerprints.update(fingerprints)
 
-            await self._client.add_comment(
-                keep_incident_id,
-                comment=_diagnosis_comment(
-                    agent_incident_id=agent_incident_id,
-                    diagnosis=diagnosis,
-                    source_status=report.get("source_status", {}),
-                    alert_status=alert_status,
-                    resolved_at=resolved_at,
-                ),
-                status=_keep_activity_status(alert_status),
-            )
+            for comment in _diagnosis_comments(
+                agent_incident_id=agent_incident_id,
+                diagnosis=diagnosis,
+                source_status=report.get("source_status", {}),
+                alert_status=alert_status,
+                resolved_at=resolved_at,
+            ):
+                await self._client.add_comment(
+                    keep_incident_id,
+                    comment=comment,
+                    status=_keep_activity_status(alert_status),
+                )
             return keep_incident_id
 
     async def publish_resolution(
@@ -218,33 +219,104 @@ def _keep_activity_status(alert_status: str) -> IncidentActivityStatus:
     return "resolved" if alert_status == "resolved" else "firing"
 
 
-def _diagnosis_comment(
+def _diagnosis_comments(
     *,
     agent_incident_id: str,
     diagnosis: dict[str, Any],
     source_status: Any,
     alert_status: str,
     resolved_at: str | None,
-) -> str:
+) -> list[str]:
     hypothesis = diagnosis.get("primary_hypothesis")
-    hypothesis_title = (
-        hypothesis.get("title", "Unavailable")
-        if isinstance(hypothesis, dict)
-        else "Unavailable"
+    if not isinstance(hypothesis, dict):
+        hypothesis = {}
+
+    service = _display_text(diagnosis.get("affected_service"), "inconnu", 200)
+    severity = _display_text(diagnosis.get("severity_assessment"), "inconnue", 40)
+    alert = (
+        f"{alert_status} — {resolved_at}"
+        if alert_status == "resolved" and resolved_at
+        else alert_status
     )
-    sources = (
-        ", ".join(f"{name}={status}" for name, status in sorted(source_status.items()))
-        if isinstance(source_status, dict)
-        else "unavailable"
+    summary = _display_text(diagnosis.get("summary"), "Aucun résumé disponible.", 500)
+    comments = [
+        (
+            f"IA4Ops — Résumé du diagnostic ({agent_incident_id})\n"
+            f"Service : {service}\n"
+            f"Sévérité estimée : {severity}\n"
+            f"État de l'alerte : {alert}\n"
+            f"Résumé : {summary}"
+        )
+    ]
+
+    hypothesis_title = _display_text(hypothesis.get("title"), "Non déterminée", 200)
+    likelihood = _display_text(hypothesis.get("likelihood"), "inconnue", 20)
+    reasoning = _display_text(hypothesis.get("reasoning"), "", 1000)
+    hypothesis_section = (
+        f"IA4Ops — Hypothèse principale : {hypothesis_title} "
+        f"(confiance : {likelihood})"
     )
-    resolution = f" at {resolved_at}" if alert_status == "resolved" and resolved_at else ""
-    return (
-        f"IA4Ops pre-analysis ({agent_incident_id})\n"
-        f"Service: {str(diagnosis.get('affected_service') or 'unknown')[:200]}\n"
-        f"Severity: {str(diagnosis.get('severity_assessment') or 'unknown')[:40]}\n"
-        f"Summary: {str(diagnosis.get('summary') or 'No summary available')[:500]}\n"
-        f"Primary hypothesis: {str(hypothesis_title)[:200]}\n"
-        f"Data sources: {sources[:300]}\n"
-        f"Alert status: {alert_status}{resolution}\n"
-        "No remediation action was executed."
-    )
+    if reasoning:
+        hypothesis_section += f"\nRaisonnement : {reasoning}"
+
+    evidence = diagnosis.get("evidence")
+    if isinstance(evidence, list) and evidence:
+        evidence_lines = []
+        for item in evidence[:8]:
+            if not isinstance(item, dict):
+                continue
+            source = _display_text(item.get("source"), "observation", 40)
+            observation = _display_text(item.get("observation"), "", 400)
+            if observation:
+                evidence_lines.append(f"- {source} : {observation}")
+        if evidence_lines:
+            hypothesis_section += "\nÉléments observés :\n" + "\n".join(evidence_lines)
+    comments.append(hypothesis_section)
+
+    missing = _text_list(diagnosis.get("missing_information"), limit=5, item_length=300)
+    next_checks = _text_list(diagnosis.get("recommended_next_checks"), limit=5, item_length=300)
+    source_labels = {
+        "metrics": "métriques",
+        "logs": "logs",
+        "cluster": "Kubernetes",
+    }
+    if isinstance(source_status, dict) and source_status:
+        sources = ", ".join(
+            f"{source_labels.get(name, name)} : {status}"
+            for name, status in sorted(source_status.items())
+        )
+    else:
+        sources = "indisponible"
+    context_lines = [
+        f"IA4Ops — Limites et prochaines étapes ({agent_incident_id})",
+        f"Collecte : {sources}",
+    ]
+    if missing:
+        missing_text = "\n".join(f"- {item}" for item in missing)
+        context_lines.append(f"Informations manquantes :\n{missing_text}")
+    if next_checks:
+        context_lines.append(
+            "Vérifications suggérées :\n"
+            + "\n".join(f"{index}. {item}" for index, item in enumerate(next_checks, start=1))
+        )
+    context_lines.append("Aucune action de remédiation n'a été exécutée.")
+    comments.append("\n".join(context_lines))
+    return comments
+
+
+def _display_text(value: Any, fallback: str, limit: int) -> str:
+    """Normalize an LLM-provided display value and keep the activity bounded."""
+    if not isinstance(value, str):
+        return fallback
+    normalized = " ".join(value.split())
+    return normalized[:limit] if normalized else fallback
+
+
+def _text_list(value: Any, *, limit: int, item_length: int) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [
+        _display_text(item, "", item_length)
+        for item in value[:limit]
+        if isinstance(item, str) and item.strip()
+    ]
