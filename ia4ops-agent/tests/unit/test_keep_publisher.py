@@ -55,7 +55,7 @@ async def test_publishes_diagnosis_and_all_alerts_to_one_keep_incident() -> None
             return httpx.Response(202, json={"id": "keep-1"}, request=request)
         if request.url.path == "/incidents/keep-1/alerts":
             assert json.loads(request.content) == ["fp-a", "fp-b"]
-            return httpx.Response(202, json=[], request=request)
+            return httpx.Response(202, content=b"", request=request)
         if request.url.path == "/incidents/keep-1/comment":
             body = json.loads(request.content)
             assert body["status"] == "firing"

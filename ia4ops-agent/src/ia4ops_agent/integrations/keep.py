@@ -1,4 +1,4 @@
-"""Minimal async client for the Keep API; not wired into the incident workflow yet."""
+"""Async client for the Keep API."""
 
 from typing import Any, Literal
 from urllib.parse import quote
@@ -97,20 +97,19 @@ class KeepClient:
         self,
         incident_id: str,
         fingerprints: list[str],
-    ) -> list[dict[str, Any]]:
+    ) -> None:
         """Associate existing Keep alerts with an incident."""
         if not incident_id:
             raise ValueError("incident_id must not be empty")
         if not fingerprints or any(not fingerprint for fingerprint in fingerprints):
             raise ValueError("fingerprints must contain at least one non-empty value")
-        result = await self._request_json(
+        await self._request_json(
             "POST",
             f"/incidents/{quote(incident_id, safe='')}/alerts",
-            expected_type=list,
+            expected_type=None,
             expected_status=202,
             json=fingerprints,
         )
-        return result
 
     async def add_comment(
         self,
@@ -136,7 +135,7 @@ class KeepClient:
         method: str,
         path: str,
         *,
-        expected_type: type[dict] | type[list],
+        expected_type: type[dict] | type[list] | None,
         expected_status: int = 200,
         json: Any = None,
     ) -> Any:
@@ -154,7 +153,10 @@ class KeepClient:
                         f"expected {expected_status}.",
                         status_code=response.status_code,
                     )
-                payload = response.json()
+                if expected_type is not None:
+                    payload = response.json()
+                else:
+                    return None
         except httpx.HTTPError as exc:
             raise KeepAPIError(
                 f"Keep API request failed ({method} {path}, {type(exc).__name__})."

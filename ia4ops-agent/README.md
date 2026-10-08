@@ -116,8 +116,9 @@ alertes d'un groupe enrichi. Une notification `resolved` ajoute une activité de
 clore automatiquement l'incident Keep. Les notifications résolues répétées sont dédupliquées côté
 agent en mémoire ; après redémarrage, l'état d'idempotence local est perdu. La publication Keep
 est best-effort : un échec est tracé et ne bloque ni l'acquittement Alertmanager ni le rapport
-local. Les tests unitaires utilisent un transport HTTP simulé ; l'intégration réelle doit être
-validée dans le cluster.
+local. L'association des alertes traite le `202 Accepted` comme un acquittement ; le corps de
+réponse de cet endpoint n'est pas requis par l'agent. Les tests unitaires utilisent un transport
+HTTP simulé ; l'intégration réelle doit être validée dans le cluster.
 
 ## Image Docker
 
@@ -148,7 +149,8 @@ les fournir à l'exécution (variables d'environnement, secret Kubernetes monté
 Manifests GitOps : [`manifest/applications/ia4ops-agent/`](../manifest/applications/ia4ops-agent/),
 déployés par Flux dans le namespace `ia4ops` :
 
-- `Deployment` 1 réplica, `LLM_PROVIDER=mock` et `DATA_PROVIDER=real` actuellement,
+- `Deployment` 1 réplica ; le manifeste de test configure `LLM_PROVIDER=gemini` et
+  `DATA_PROVIDER=real` (le comportement Gemini + providers réels via webhook reste à valider),
   non-root,
   système de fichiers en lecture seule, sans token d'API Kubernetes ; audit trail sur un PVC de 1 Gi ;
 - `Service` ClusterIP `ia4ops-agent.ia4ops.svc:8000`, sans exposition publique ;
@@ -159,7 +161,9 @@ déployés par Flux dans le namespace `ia4ops` :
   `manifest/base/kube-prometheus-stack/kube-prometheus-stack-helmrelease.yaml`.
 
 Version déployée : tag `newTag` de `manifest/applications/ia4ops-agent/kustomization.yaml`
-(`sha-<commit>` produit par la CI), à mettre à jour pour déployer une nouvelle image.
+(`sha-<commit>` produit par la CI). Après chaque changement de code agent, attendre l'image de CI
+puis référencer son tag avant le rollout. Le changement de configuration LLM ne suffit pas à
+embarquer un correctif Keep qui n'est pas encore dans une image publiée.
 
 ### Secrets du cluster et rotation des identifiants
 

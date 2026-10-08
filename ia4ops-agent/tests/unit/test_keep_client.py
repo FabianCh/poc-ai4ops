@@ -57,23 +57,19 @@ async def test_create_incident_sends_documented_fields() -> None:
     assert incident["id"] == "incident-123"
 
 
-async def test_add_alerts_sends_fingerprint_list_to_incident() -> None:
+async def test_add_alerts_accepts_empty_202_response_body() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.method == "POST"
         assert request.url.path == "/v2/incidents/incident-123/alerts"
         assert json.loads(request.content) == ["fp-123", "fp-456"]
-        return httpx.Response(
-            202,
-            json=[{"fingerprint": "fp-123"}, {"fingerprint": "fp-456"}],
-            request=request,
-        )
+        return httpx.Response(202, content=b"", request=request)
 
-    alerts = await _client(httpx.MockTransport(handler)).add_alerts_to_incident(
+    result = await _client(httpx.MockTransport(handler)).add_alerts_to_incident(
         "incident-123",
         ["fp-123", "fp-456"],
     )
 
-    assert [alert["fingerprint"] for alert in alerts] == ["fp-123", "fp-456"]
+    assert result is None
 
 
 async def test_add_comment_includes_required_status_and_comment() -> None:
