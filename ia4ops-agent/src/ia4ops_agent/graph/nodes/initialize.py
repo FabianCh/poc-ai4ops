@@ -14,7 +14,7 @@ from typing import Any
 
 from ia4ops_agent.audit.models import AuditEvent
 from ia4ops_agent.audit.trace_logging import emit_trace_event
-from ia4ops_agent.domain.alerts import AlertmanagerWebhook
+from ia4ops_agent.domain.alerts import AlertmanagerWebhook, service_from_labels
 from ia4ops_agent.graph.state import IncidentState
 
 
@@ -35,7 +35,7 @@ def initialize_node(state: IncidentState) -> dict[str, Any]:
     normalized = {
         "incident_id": incident_id,
         "alert_name": primary.labels.alertname,
-        "service": primary.labels.service_name or "unknown",
+        "service": service_from_labels(primary.labels) or "unknown",
         "namespace": primary.labels.namespace,
         "severity": primary.labels.severity or "unknown",
         "started_at": primary.startsAt.isoformat(),

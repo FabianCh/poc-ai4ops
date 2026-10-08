@@ -15,7 +15,7 @@ import pytest
 from pydantic import ValidationError
 
 from ia4ops_agent.audit.models import AuditEvent
-from ia4ops_agent.domain.alerts import AlertItem, AlertmanagerWebhook
+from ia4ops_agent.domain.alerts import AlertItem, AlertmanagerWebhook, service_from_labels
 from ia4ops_agent.domain.context import (
     IncidentContext,
     IncidentInfo,
@@ -155,6 +155,21 @@ class TestAlertmanagerWebhook:
         wh = AlertmanagerWebhook(**payload)
         services = wh.affected_services()
         assert services == ["product-catalog"]
+
+    def test_affected_services_uses_container_label_for_container_alerts(self) -> None:
+        container_alert = {
+            **ALERT_ITEM_FIRING,
+            "fingerprint": "cpu1",
+            "labels": {
+                "alertname": "OtelDemoContainerHighCpu",
+                "namespace": "otel-demo",
+                "pod": "ad-544b5478f8-g8f87",
+                "container": "ad",
+            },
+        }
+        payload = {**WEBHOOK_PAYLOAD, "alerts": [ALERT_ITEM_FIRING, container_alert]}
+
+        assert AlertmanagerWebhook(**payload).affected_services() == ["product-catalog", "ad"]
 
     def test_is_watchdog_true(self) -> None:
         watchdog_alert = {
@@ -400,3 +415,22 @@ class TestAuditEvent:
         parsed = json.loads(line)
         assert parsed["input_summary"]["service"] == "product-catalog"
         assert parsed["output_summary"]["observations_count"] == 3
+
+
+class TestServiceFromLabels:
+    def test_prefers_service_name_then_service_then_container(self) -> None:
+        assert service_from_labels({"service_name": "cart", "container": "x"}) == "cart"
+        assert service_from_labels({"service": "cart", "container": "x"}) == "cart"
+        assert service_from_labels({"container": "ad", "pod": "ad-1"}) == "ad"
+
+    def test_derives_the_workload_from_the_pod_name(self) -> None:
+        assert service_from_labels({"pod": "ad-544b5478f8-g8f87"}) == "ad"
+        assert service_from_labels({"pod": "product-catalog-6c7d9f8b5-x2k4p"}) == "product-catalog"
+        assert service_from_labels({"pod": "otel-collector-agent-r6tzp"}) == "otel-collector-agent"
+        assert service_from_labels({"pod": "loki-0"}) == "loki"
+        assert service_from_labels({"pod": "keep-redis"}) == "keep-redis"
+
+    def test_returns_none_without_usable_label(self) -> None:
+        assert service_from_labels({}) is None
+        assert service_from_labels({"service_name": "  ", "pod": ""}) is None
+        assert service_from_labels({"service_name": 3}) is None
