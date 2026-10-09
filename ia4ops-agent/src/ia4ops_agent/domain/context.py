@@ -134,6 +134,22 @@ class IncidentContext(BaseModel):
     def to_llm_dict(self) -> dict[str, Any]:
         """
         Sérialise le contexte pour injection dans le prompt LLM.
-        Exclut les champs None pour alléger le payload.
+        Exclut les champs None et les champs redondants ou sans valeur pour le diagnostic
+        (un contexte plus court réduit le temps de réflexion et le coût du modèle).
         """
-        return self.model_dump(exclude_none=True)
+        data = self.model_dump(exclude_none=True)
+        observations = data.get("observations", {})
+        metrics = observations.get("metrics")
+        if metrics is not None and not metrics.get("extra"):
+            metrics.pop("extra", None)
+        logs = observations.get("logs")
+        if logs is not None:
+            # identifiants de traçabilité : conservés dans l'audit, inutiles pour le modèle
+            logs.pop("sample_event_ids", None)
+            logs.pop("window_minutes", None)
+        traces = observations.get("traces")
+        if traces is not None:
+            traces.pop("window_minutes", None)
+            if not traces.get("truncated"):
+                traces.pop("truncated", None)
+        return data

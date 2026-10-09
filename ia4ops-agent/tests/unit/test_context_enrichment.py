@@ -175,7 +175,7 @@ def test_context_carries_bounded_traces_and_status() -> None:
     ctx = _build(_normalized(), traces_status="success", traces_data=data)
     traces = ctx["observations"]["traces"]
     assert traces["error_trace_count"] == 14
-    assert len(traces["top_error_spans"]) == 5
+    assert len(traces["top_error_spans"]) == 3
     assert len(traces["sample_trace_ids"]) == 3
     assert traces["services_in_error_chain"][-1] == "product-catalog"
     assert ctx["source_status"]["traces"] == "success"
@@ -275,3 +275,76 @@ def test_keep_collection_summary_names_the_traces_source() -> None:
 
     summary = source_summary({"metrics": "success", "traces": "unavailable", "logs": "success"})
     assert "traces : unavailable" in summary
+
+
+# --- Contexte compact (temps de réflexion du modèle) -------------------------------------
+
+_CHECKOUT_TRACES = {
+    "status": "success", "error_trace_count": 8, "truncated": False, "window_minutes": 15,
+    "top_error_spans": [
+        {"service": "product-catalog", "operation": "GetProduct", "count": 16,
+         "status_description": "Error: Product Catalog Fail Feature Flag Enabled"},
+        {"service": "checkout", "operation": "PlaceOrder", "count": 8,
+         "status_description": "failed to prepare order"},
+        {"service": "frontend-proxy", "operation": "router frontend egress", "count": 16,
+         "http_status_code": "500"},
+        {"service": "frontend", "operation": "GetProduct", "count": 8, "grpc_status_code": "13"},
+    ],
+    "services_in_error_chain": ["frontend-proxy", "frontend", "checkout", "product-catalog"],
+    "max_duration_ms": 404.0,
+    "sample_trace_ids": ["a" * 32, "b" * 32, "c" * 32],
+}
+
+
+def _checkout_context() -> dict[str, Any]:
+    metrics = {"status": "success", "error_rate": 0.16, "latency_p95_ms": 315.0,
+               "request_rate": 0.04, "memory_ratio": 0.524, "memory_working_set_mb": 16.8,
+               "memory_limit_mb": 32.0, "cpu_cores": 0.001, "restarts_10m": 0,
+               "oom_killed": False, "window_minutes": 15}
+    logs = [_log("Checkout failed to place order", "error", "frontend"),
+            _log("API request failed", "error", "frontend")]
+    normalized = _normalized(
+        alerts_count=3, summary="Taux d'erreur élevé sur le service checkout",
+        description="25% des requêtes reçues par checkout sont en erreur depuis 2 min. "
+                    "Pistes : traces en erreur dans Jaeger, logs Loki, feature flags actifs.",
+    )
+    return _build(normalized, metrics_status="success", metrics_data=metrics,
+                  traces_status="success", traces_data=_CHECKOUT_TRACES,
+                  logs_status="success", logs_data=logs, cluster_status="unavailable",
+                  missing_information=["État cluster indisponible pour checkout"])
+
+
+def test_llm_context_drops_redundant_fields() -> None:
+    import json
+
+    ctx = _checkout_context()
+    obs = ctx["observations"]
+    assert "extra" not in obs["metrics"]
+    assert "sample_event_ids" not in obs["logs"]
+    assert "window_minutes" not in obs["logs"]
+    assert "window_minutes" not in obs["traces"]
+    assert "truncated" not in obs["traces"]
+    assert len(json.dumps(ctx, ensure_ascii=False)) < 1800
+
+
+def test_error_spans_keep_messages_and_drop_http_only_repeats() -> None:
+    spans = _checkout_context()["observations"]["traces"]["top_error_spans"]
+    assert [s["service"] for s in spans] == ["product-catalog", "checkout"]
+    assert all(s.get("status_description") for s in spans)
+
+
+def test_error_spans_fall_back_to_status_codes_without_messages() -> None:
+    data = {**_CHECKOUT_TRACES, "top_error_spans": [
+        {"service": "frontend-proxy", "operation": f"op{i}", "count": 1, "http_status_code": "500"}
+        for i in range(5)]}
+    spans = _build(_normalized(), traces_status="success", traces_data=data)[
+        "observations"]["traces"]["top_error_spans"]
+    assert len(spans) == 3
+    assert spans[0]["http_status_code"] == "500"
+
+
+def test_truncated_traces_flag_is_kept_when_true() -> None:
+    data = {**_CHECKOUT_TRACES, "truncated": True}
+    traces = _build(_normalized(), traces_status="success", traces_data=data)[
+        "observations"]["traces"]
+    assert traces["truncated"] is True

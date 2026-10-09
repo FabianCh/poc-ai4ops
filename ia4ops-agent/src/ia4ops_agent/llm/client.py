@@ -33,7 +33,11 @@ from ia4ops_agent.llm.prompts import PROMPT_VERSION, SYSTEM_PROMPT, build_user_m
 logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 3
-TIMEOUT_SECONDS = 60
+# Un contexte riche (traces, logs, métriques) allonge le raisonnement de Gemini : 60 s ne
+# suffisait plus (3 timeouts de suite sur un incident multi-services).
+TIMEOUT_SECONDS = 120
+# Jetons de réflexion maximum de Gemini 2.5 Flash (0 = désactivé, -1 = dynamique)
+THINKING_BUDGET = 1024
 BACKOFF_BASE_SECONDS = 2.0
 
 # Mots-clés JSON Schema non supportés par Vertex AI structured output.
@@ -119,6 +123,7 @@ class GeminiVertexClient:
             project=project,
             location=location,
             temperature=0,
+            thinking_budget=THINKING_BUDGET,
             max_retries=0,  # retries gérés manuellement
         )
 

@@ -96,12 +96,25 @@ def _build_logs_observation(
     )
 
 
+_MAX_ERROR_SPANS = 3
+
+
+def _informative_spans(spans: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Au plus 3 spans en erreur ; sans message d'erreur, ils répètent seulement un code HTTP.
+
+    Dès qu'un span porte un message d'erreur, les spans sans message sont écartés (le nombre
+    de traces en erreur et la chaîne de services portent déjà ce signal).
+    """
+    with_message = [span for span in spans if span.get("status_description")]
+    return list(with_message or spans)[:_MAX_ERROR_SPANS]
+
+
 def _build_traces_observation(data: dict[str, Any]) -> TracesObservation | None:
     if not data:
         return None
     return TracesObservation(
         error_trace_count=data.get("error_trace_count", 0),
-        top_error_spans=list(data.get("top_error_spans", []))[:5],
+        top_error_spans=_informative_spans(data.get("top_error_spans", [])),
         services_in_error_chain=list(data.get("services_in_error_chain", []))[:6],
         max_duration_ms=data.get("max_duration_ms"),
         sample_trace_ids=list(data.get("sample_trace_ids", []))[:3],

@@ -82,3 +82,22 @@ async def test_validation_failure_is_included_in_the_next_model_attempt(
     repair_request = received_messages[1][-1].content
     assert "alternative_hypotheses.0.evidence_refs" in repair_request
     assert "recopie exactement une valeur de evidence.reference" in repair_request
+
+
+def test_gemini_client_bounds_thinking_and_allows_long_calls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Un contexte riche allonge le raisonnement : budget borné et timeout de 120 s."""
+    captured: dict[str, Any] = {}
+
+    class FakeChat:
+        def __init__(self, **kwargs: Any) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setattr(client_module, "ChatGoogleGenerativeAI", FakeChat)
+    GeminiVertexClient("gemini-2.5-flash", "project", "europe-west1")
+
+    assert captured["thinking_budget"] == 1024
+    assert captured["max_retries"] == 0
+    assert captured["temperature"] == 0
+    assert client_module.TIMEOUT_SECONDS == 120
