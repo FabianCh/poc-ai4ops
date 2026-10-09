@@ -98,6 +98,7 @@ def test_gemini_client_bounds_thinking_and_allows_long_calls(
     GeminiVertexClient("gemini-2.5-flash", "project", "europe-west1")
 
     assert captured["thinking_budget"] == 1024
+    assert captured["max_output_tokens"] == 4096  # une génération qui s'emballe échoue vite
     assert captured["max_retries"] == 0
     assert captured["temperature"] == 0
     assert client_module.TIMEOUT_SECONDS == 120

@@ -38,6 +38,9 @@ MAX_ATTEMPTS = 3
 TIMEOUT_SECONDS = 120
 # Jetons de réflexion maximum de Gemini 2.5 Flash (0 = désactivé, -1 = dynamique)
 THINKING_BUDGET = 1024
+# Plafond de sortie : un diagnostic fait ~1,5 k jetons. Sans plafond, une génération qui
+# s'emballe (listes sans fin) dure plus de 3 minutes avant d'être rejetée.
+MAX_OUTPUT_TOKENS = 4096
 BACKOFF_BASE_SECONDS = 2.0
 
 # Mots-clés JSON Schema non supportés par Vertex AI structured output.
@@ -124,6 +127,7 @@ class GeminiVertexClient:
             location=location,
             temperature=0,
             thinking_budget=THINKING_BUDGET,
+            max_output_tokens=MAX_OUTPUT_TOKENS,
             max_retries=0,  # retries gérés manuellement
         )
 
