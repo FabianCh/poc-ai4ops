@@ -39,8 +39,8 @@ signale-la dans missing_information.
 12. Rédige tous les champs textuels en français, de façon concise : phrases courtes, \
 une idée par élément de liste, sans répéter les observations déjà citées dans evidence.
 13. Respecte ces bornes de taille : evidence de 3 à 8 éléments ; \
-alternative_hypotheses 2 au plus ; missing_information, recommended_next_checks et remediation_suggestions 5 éléments au plus \
-chacun ; chaque texte en une ou deux phrases. \
+alternative_hypotheses 2 au plus ; missing_information, recommended_next_checks \
+et remediation_suggestions 5 éléments au plus chacun ; chaque texte en une ou deux phrases. \
 Termine le JSON dès les bornes atteintes.
 
 Le champ action_executed doit toujours être false.\
