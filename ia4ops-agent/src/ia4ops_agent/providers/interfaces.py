@@ -53,15 +53,19 @@ class LogsProvider(Protocol):
         namespace: str,
         window_minutes: int = 15,
         limit: int = 100,
+        trace_ids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Retourne les logs d'erreur normalisés.
+
+        `trace_ids` (optionnel) : identifiants de traces en erreur ; les logs error/warn de ces
+        traces (error/warn), tous services confondus, s'ajoutent aux logs du service.
 
         Chaque entrée attendue :
         {
             "event_id": str,
             "timestamp": str,   # ISO 8601
-            "level": str,       # "error" | "warn" | ...
+            "level": str,       # "error" | "warn" | "info" (erreur journalisée en INFO) | ...
             "message": str,
             "service": str,
         }

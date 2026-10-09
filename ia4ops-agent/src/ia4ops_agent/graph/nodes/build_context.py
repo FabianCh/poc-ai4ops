@@ -60,26 +60,37 @@ def _build_metrics_observation(data: dict[str, Any]) -> MetricsObservation | Non
     )
 
 
-def _build_logs_observation(logs: list[dict[str, Any]]) -> LogsObservation | None:
+def _build_logs_observation(
+    logs: list[dict[str, Any]], service: str | None = None
+) -> LogsObservation | None:
     if not logs:
         return None
 
-    # Agréger les patterns par message (simplifié : top 5 messages)
-    patterns: dict[str, int] = {}
+    # Agréger les patterns par (message, niveau, service) — top 5, messages bornés à 200 car.
+    patterns: dict[tuple[str, str, str], int] = {}
+    by_level: dict[str, int] = {}
     for log in logs:
-        msg = log.get("message", "")
-        patterns[msg] = patterns.get(msg, 0) + 1
+        msg = " ".join(str(log.get("message", "")).split())[:200]
+        level = str(log.get("level", "")).lower()
+        origin = str(log.get("service", ""))
+        key = (msg, level, origin)
+        patterns[key] = patterns.get(key, 0) + 1
+        if level:
+            by_level[level] = by_level.get(level, 0) + 1
 
     top = sorted(patterns.items(), key=lambda x: x[1], reverse=True)[:5]
     return LogsObservation(
         error_count=len(logs),
+        by_level=by_level,
         top_patterns=[
             LogPattern(
-                pattern=msg[:200],  # borné
+                pattern=msg,
                 count=count,
-                sample_message=msg[:200],
+                sample_message=msg,
+                level=level or None,
+                service=origin if origin and origin != service else None,
             )
-            for msg, count in top
+            for (msg, level, origin), count in top
         ],
         sample_event_ids=[log.get("event_id", "") for log in logs[:3]],
         window_minutes=15,
@@ -124,7 +135,7 @@ async def build_context_node(state: IncidentState) -> dict[str, Any]:
     cluster_status: SourceStatus = state.get("cluster_status", "not_started")
 
     metrics_obs = _build_metrics_observation(state.get("metrics_data", {}))
-    logs_obs = _build_logs_observation(state.get("logs_data", []))
+    logs_obs = _build_logs_observation(state.get("logs_data", []), normalized.get("service"))
     traces_obs = _build_traces_observation(state.get("traces_data", {}))
     cluster_obs = _build_k8s_observation(state.get("cluster_data", {}))
 

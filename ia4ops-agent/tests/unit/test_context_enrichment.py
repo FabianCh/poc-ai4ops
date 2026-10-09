@@ -196,3 +196,63 @@ def test_graph_order_runs_traces_before_logs() -> None:
     assert ("collect_metrics", "collect_traces") in edges
     assert ("collect_traces", "collect_logs") in edges
     assert ("collect_logs", "collect_cluster") in edges
+
+
+# --- Point 4 : logs --------------------------------------------------------------------
+
+
+def _log(message: str, level: str = "error", service: str = "checkout") -> dict[str, str]:
+    return {"event_id": message[:8], "timestamp": "t", "level": level, "message": message,
+            "service": service}
+
+
+def test_logs_observation_reports_levels_and_foreign_services() -> None:
+    logs = [
+        _log("payment failed", "info"),
+        _log("payment failed", "info"),
+        _log("Checkout failed to place order", "error", "frontend"),
+    ]
+    obs = _build(_normalized(), logs_status="success", logs_data=logs)["observations"]["logs"]
+
+    assert obs["by_level"] == {"info": 2, "error": 1}
+    top = obs["top_patterns"]
+    assert top[0]["pattern"] == "payment failed" and top[0]["count"] == 2
+    assert top[0]["level"] == "info"
+    assert "service" not in top[0]  # même service que l'alerte
+    assert top[1]["service"] == "frontend"  # log d'un autre service (corrélation par trace)
+
+
+def test_empty_logs_are_reported_as_missing_not_as_healthy() -> None:
+    from ia4ops_agent.graph.nodes.collect_logs import make_collect_logs_node
+
+    class _NoLogs:
+        async def get_recent_errors(self, service, namespace, window_minutes=15, limit=100,
+                                    trace_ids=None):
+            return []
+
+    node = make_collect_logs_node(_NoLogs())
+    state = {"incident_id": "inc-1", "normalized_alert": _normalized(), "audit_events": []}
+    result = asyncio.run(node(state))
+
+    assert result["logs_status"] == "success"
+    assert any("Aucun log d'erreur" in line for line in result["missing_information"])
+
+
+def test_logs_collection_receives_trace_ids_from_traces() -> None:
+    from ia4ops_agent.graph.nodes.collect_logs import make_collect_logs_node
+
+    seen: dict[str, Any] = {}
+
+    class _SpyLogs:
+        async def get_recent_errors(self, service, namespace, window_minutes=15, limit=100,
+                                    trace_ids=None):
+            seen["trace_ids"] = trace_ids
+            return [_log("boom")]
+
+    node = make_collect_logs_node(_SpyLogs())
+    base = {"incident_id": "inc-1", "normalized_alert": _normalized(), "audit_events": []}
+    asyncio.run(node({**base, "traces_data": {"sample_trace_ids": ["a" * 32]}}))
+    assert seen["trace_ids"] == ["a" * 32]
+
+    asyncio.run(node(base))  # traces indisponibles : collecte des logs sans trace_ids
+    assert seen["trace_ids"] is None

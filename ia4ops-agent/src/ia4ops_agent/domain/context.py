@@ -51,12 +51,18 @@ class LogPattern(BaseModel):
     pattern: str
     count: int
     sample_message: str | None = None
+    level: str | None = None
+    # Renseigné seulement si le log vient d'un autre service (corrélation par trace)
+    service: str | None = None
 
 
 class LogsObservation(BaseModel):
     """Résumé des logs d'erreur sur la fenêtre d'observation."""
 
     error_count: int = 0
+    by_level: dict[str, int] = Field(
+        default_factory=dict, description="Nombre de lignes par niveau (info = erreur dans un INFO)"
+    )
     top_patterns: list[LogPattern] = Field(default_factory=list)
     # Identifiants permettant de retrouver les événements source (traçabilité)
     sample_event_ids: list[str] = Field(default_factory=list)

@@ -109,6 +109,7 @@ class MockLogsProvider:
         namespace: str,
         window_minutes: int = 15,
         limit: int = 100,
+        trace_ids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         if service == "frontend":
             raise LogsUnavailableError(

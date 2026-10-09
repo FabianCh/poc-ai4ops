@@ -29,9 +29,16 @@ def make_collect_logs_node(provider: LogsProvider):
         missing = list(state.get("missing_information", []))
 
         try:
-            logs = await provider.get_recent_errors(service, namespace)
+            # Traces en erreur (collect_traces) : corrélation logs ↔ traces, si disponible.
+            trace_ids = state.get("traces_data", {}).get("sample_trace_ids") or None
+            logs = await provider.get_recent_errors(service, namespace, trace_ids=trace_ids)
             status = "success"
             logs_data = logs
+            if not logs:
+                missing.append(
+                    f"Aucun log d'erreur trouvé pour {service} sur la fenêtre : "
+                    "l'absence de logs ne prouve pas l'absence de problème"
+                )
         except LogsUnavailableError as exc:
             status = "unavailable"
             logs_data = []

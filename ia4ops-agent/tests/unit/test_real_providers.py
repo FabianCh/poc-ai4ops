@@ -237,10 +237,10 @@ async def test_prometheus_provider_requires_grafana_configuration(
 
 
 async def test_loki_provider_queries_and_normalizes_streams() -> None:
-    request_params: dict[str, str] = {}
+    all_params: list[dict[str, str]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        request_params.update(dict(request.url.params))
+        all_params.append(dict(request.url.params))
         assert request.url.path.endswith("/loki/api/v1/query_range")
         assert request.headers["authorization"] == "Basic dGVzdC11c2VyOnRlc3QtcGFzc3dvcmQ="
         return httpx.Response(
@@ -281,15 +281,21 @@ async def test_loki_provider_queries_and_normalizes_streams() -> None:
 
     assert len(logs) == 1
     assert logs[0]["event_id"].startswith("loki-")
-    assert logs[0]["timestamp"] == "2026-10-07T16:20:00+00:00"
+    # le plus récent d'abord, limité à `limit`
+    assert logs[0]["timestamp"] == "2026-10-07T16:20:01+00:00"
     assert logs[0]["level"] == "error"
-    assert logs[0]["message"] == "redis connection timeout"
+    assert logs[0]["message"] == "database connection refused"
     assert logs[0]["service"] == "product-catalog"
-    assert 'service_name="product-catalog"' in request_params["query"]
-    assert 'k8s_namespace_name="otel-demo"' in request_params["query"]
-    assert 'detected_level=~"(?i)(error|fatal|critical|warn(?:ing)?)"' in request_params["query"]
-    assert request_params["direction"] == "backward"
-    assert request_params["limit"] == "1"
+    # requête (a) par niveau et requête (b) par contenu, sans filtre de niveau
+    assert len(all_params) == 2
+    by_level = next(p for p in all_params if "detected_level" in p["query"])
+    by_content = next(p for p in all_params if "detected_level" not in p["query"])
+    assert 'service_name="product-catalog"' in by_level["query"]
+    assert 'k8s_namespace_name="otel-demo"' in by_level["query"]
+    assert 'detected_level=~"(?i)(error|fatal|critical|warn(?:ing)?)"' in by_level["query"]
+    assert '|~ "(?i)(error|exception|fail' in by_content["query"]
+    assert by_level["direction"] == "backward"
+    assert by_level["limit"] == "1"
 
 
 async def test_loki_provider_returns_empty_when_no_matching_logs() -> None:
@@ -493,3 +499,113 @@ async def test_jaeger_provider_requires_grafana_configuration(
 
     with pytest.raises(TracesUnavailableError, match="GRAFANA_BASE_URL"):
         await JaegerProvider().get_error_traces("checkout", "otel-demo")
+
+
+# --- Loki : erreurs journalisées en INFO et corrélation par trace -----------------------
+
+_TS = 1_791_390_000_000_000_000
+
+
+def _loki_streams(*entries: tuple[int, str, dict[str, str]]) -> dict[str, object]:
+    """Réponse Loki : une entrée = (décalage en s, ligne, labels du stream)."""
+    return {
+        "status": "success",
+        "data": {
+            "resultType": "streams",
+            "result": [
+                {"stream": labels, "values": [[str(_TS + offset * 1_000_000_000), line]]}
+                for offset, line, labels in entries
+            ],
+        },
+    }
+
+
+def _loki_provider(
+    answers: dict[str, dict[str, object] | int], queries: list[str] | None = None
+) -> LokiProvider:
+    """`answers` : requête 'level' | 'content' | 'trace' → payload (ou code HTTP d'erreur)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        query = request.url.params["query"]
+        if queries is not None:
+            queries.append(query)
+        name = "content"
+        if "trace_id" in query:
+            name = "trace"
+        elif "detected_level=~" in query:
+            name = "level"
+        answer = answers.get(name, _loki_streams())
+        if isinstance(answer, int):
+            return httpx.Response(answer, text="boom", request=request)
+        return httpx.Response(200, json=answer, request=request)
+
+    return LokiProvider(transport=httpx.MockTransport(handler))
+
+
+async def test_loki_provider_finds_failures_logged_at_info() -> None:
+    info_failure = {"service_name": "checkout", "detected_level": "INFO"}
+    provider = _loki_provider({
+        "level": _loki_streams(),
+        "content": _loki_streams((1, "payment failed: connection refused", info_failure)),
+    })
+
+    logs = await provider.get_recent_errors("checkout", "otel-demo")
+
+    assert [log["message"] for log in logs] == ["payment failed: connection refused"]
+    assert logs[0]["level"] == "info"  # niveau réel conservé
+
+
+async def test_loki_provider_merges_and_deduplicates_by_event() -> None:
+    error = {"service_name": "checkout", "detected_level": "ERROR"}
+    same = _loki_streams((1, "timeout calling payment", error), (2, "other error", error))
+    provider = _loki_provider({"level": same, "content": same})
+
+    logs = await provider.get_recent_errors("checkout", "otel-demo")
+
+    assert sorted(log["message"] for log in logs) == ["other error", "timeout calling payment"]
+    assert logs[0]["message"] == "other error"  # plus récent d'abord
+
+
+async def test_loki_provider_keeps_primary_logs_when_complementary_query_fails() -> None:
+    error = {"service_name": "checkout", "detected_level": "ERROR"}
+    provider = _loki_provider({"level": _loki_streams((1, "boom", error)), "content": 500})
+
+    logs = await provider.get_recent_errors("checkout", "otel-demo")
+
+    assert [log["message"] for log in logs] == ["boom"]
+
+
+async def test_loki_provider_unavailable_when_primary_query_fails() -> None:
+    provider = _loki_provider({"level": 503, "content": _loki_streams()})
+
+    with pytest.raises(LogsUnavailableError, match="Loki"):
+        await provider.get_recent_errors("checkout", "otel-demo")
+
+
+async def test_loki_provider_correlates_logs_by_trace_across_services() -> None:
+    queries: list[str] = []
+    other = {"service_name": "frontend", "detected_level": "error"}
+    provider = _loki_provider(
+        {"trace": _loki_streams((3, "Checkout failed to place order", other))}, queries
+    )
+    trace_id = "807654ed3d4912e98962eec181e5cd6f"
+
+    logs = await provider.get_recent_errors("checkout", "otel-demo", trace_ids=[trace_id])
+
+    trace_query = next(q for q in queries if "trace_id" in q)
+    assert f'trace_id=~"{trace_id}"' in trace_query
+    assert 'k8s_namespace_name="otel-demo"' in trace_query
+    assert "service_name" not in trace_query  # tous les services de la trace
+    assert 'detected_level=~"(?i)(error|fatal|critical|warn(?:ing)?)"' in trace_query
+    assert logs[0]["service"] == "frontend"
+
+
+async def test_loki_provider_never_interpolates_invalid_trace_ids() -> None:
+    queries: list[str] = []
+    provider = _loki_provider({}, queries)
+    hostile = ['x"} | drop | {a="', "ABC", "0" * 31, "g" * 32]
+
+    await provider.get_recent_errors("checkout", "otel-demo", trace_ids=hostile)
+
+    assert len(queries) == 2  # ni requête de trace, ni identifiant dans une requête
+    assert not any("trace_id" in q or "drop" in q for q in queries)
