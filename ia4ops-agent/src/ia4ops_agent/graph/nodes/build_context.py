@@ -23,6 +23,24 @@ from ia4ops_agent.domain.context import (
 from ia4ops_agent.graph.state import IncidentState, SourceStatus
 
 
+_MAX_ANNOTATION_LENGTH = 300
+
+
+def _bounded_text(value: Any, limit: int = _MAX_ANNOTATION_LENGTH) -> str | None:
+    """Texte externe normalisé (espaces) et tronqué ; None si vide ou non textuel."""
+    if not isinstance(value, str):
+        return None
+    text = " ".join(value.split())
+    if not text:
+        return None
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def _http_url(value: Any) -> str | None:
+    text = _bounded_text(value, 300)
+    return text if text and text.startswith(("http://", "https://")) else None
+
+
 def _build_metrics_observation(data: dict[str, Any]) -> MetricsObservation | None:
     if not data:
         return None
@@ -96,6 +114,10 @@ async def build_context_node(state: IncidentState) -> dict[str, Any]:
             namespace=normalized.get("namespace", "otel-demo"),
             severity=normalized.get("severity", "unknown"),
             started_at=normalized.get("started_at", ""),
+            alerts_count=normalized.get("alerts_count"),
+            summary=_bounded_text(normalized.get("summary")),
+            description=_bounded_text(normalized.get("description")),
+            runbook_url=_http_url(normalized.get("runbook_url")),
         ),
         observations=Observations(
             metrics=metrics_obs,

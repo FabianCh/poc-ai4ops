@@ -43,6 +43,11 @@ def initialize_node(state: IncidentState) -> dict[str, Any]:
         "status": webhook.status,
         "is_watchdog": webhook.is_watchdog(),
         "affected_services": webhook.affected_services(),
+        "alerts_count": len(webhook.alerts),
+        # Annotations de l'alerte principale : texte externe, borné plus loin (build_context)
+        "summary": primary.annotations.summary,
+        "description": primary.annotations.description,
+        "runbook_url": primary.annotations.runbook_url,
     }
 
     duration_ms = int((datetime.now(UTC) - start).total_seconds() * 1000)

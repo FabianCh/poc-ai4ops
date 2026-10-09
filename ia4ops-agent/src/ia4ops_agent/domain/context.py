@@ -21,6 +21,11 @@ class IncidentInfo(BaseModel):
     namespace: str
     severity: str
     started_at: str  # ISO 8601
+    alerts_count: int | None = Field(None, description="Nombre d'alertes du groupe Alertmanager")
+    # Annotations de l'alerte : texte externe donc non fiable (borné à la construction)
+    summary: str | None = None
+    description: str | None = None
+    runbook_url: str | None = None
 
 
 class MetricsObservation(BaseModel):
