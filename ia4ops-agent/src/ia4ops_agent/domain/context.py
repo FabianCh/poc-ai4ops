@@ -36,6 +36,11 @@ class MetricsObservation(BaseModel):
     cpu_ratio: float | None = Field(None, description="Ratio CPU (cœurs utilisés / limite)")
     memory_ratio: float | None = Field(None, description="Ratio mémoire (utilisé / limite)")
     request_rate: float | None = Field(None, description="Requêtes par seconde")
+    cpu_cores: float | None = Field(None, description="Cœurs CPU consommés (sans limite CPU)")
+    memory_working_set_mb: float | None = None
+    memory_limit_mb: float | None = None
+    restarts_10m: int | None = Field(None, description="Redémarrages du conteneur sur 10 min")
+    oom_killed: bool | None = Field(None, description="Redémarrage récent après un OOMKilled")
     window_minutes: int = 15
     extra: dict[str, Any] = Field(default_factory=dict)
 

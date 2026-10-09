@@ -34,21 +34,63 @@ def _prometheus_response(value: str | None, request: httpx.Request | None = None
     )
 
 
-async def test_prometheus_provider_queries_and_normalizes_metrics() -> None:
-    queries: list[str] = []
+_SPAN_ANSWERS: dict[str, str | None] = {"error_rate": "0.08", "request_rate": "12.0",
+                                          "latency_p95_ms": "72.5"}
+_CONTAINER_ANSWERS: dict[str, str | None] = {
+    "memory_ratio": "0.5", "memory_working_set_bytes": str(256 * 1024 * 1024),
+    "memory_limit_bytes": str(512 * 1024 * 1024), "cpu_cores": "0.25", "cpu_limit_cores": None,
+    "restarts_10m": "0", "oom_last_terminated": None,
+}
+
+
+def _query_name(query: str) -> str:
+    """Identifie la requête du provider (le contenu des requêtes est vérifié par ailleurs)."""
+    if "STATUS_CODE_ERROR" in query:
+        return "error_rate"
+    if "histogram_quantile" in query:
+        return "latency_p95_ms"
+    if "traces_span_metrics_calls_total" in query:
+        return "request_rate"
+    if "last_terminated_reason" in query:
+        return "oom_last_terminated"
+    if "restarts_total" in query:
+        return "restarts_10m"
+    if "container_cpu_usage" in query:
+        return "cpu_cores"
+    if 'resource="cpu"' in query:
+        return "cpu_limit_cores"
+    if "/ on (" in query:
+        return "memory_ratio"
+    if "container_memory_working_set_bytes" in query:
+        return "memory_working_set_bytes"
+    return "memory_limit_bytes"
+
+
+def _prom_provider(
+    overrides: dict[str, str | None] | None = None,
+    *,
+    failing: set[str] | None = None,
+    queries: list[str] | None = None,
+) -> PrometheusProvider:
+    """Provider dont chaque requête répond selon son nom ; `failing` → HTTP 500."""
+    answers = {**_SPAN_ANSWERS, **_CONTAINER_ANSWERS, **(overrides or {})}
 
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path.endswith("/prometheus/api/v1/query")
         assert request.headers["authorization"] == "Basic dGVzdC11c2VyOnRlc3QtcGFzc3dvcmQ="
         query = request.url.params["query"]
-        queries.append(query)
-        if "STATUS_CODE_ERROR" in query:
-            return _prometheus_response("0.08")
-        if "histogram_quantile" in query:
-            return _prometheus_response("72.5")
-        return _prometheus_response("12.0")
+        if queries is not None:
+            queries.append(query)
+        name = _query_name(query)
+        if failing and name in failing:
+            return httpx.Response(500, text="boom", request=request)
+        return _prometheus_response(answers[name], request)
 
-    provider = PrometheusProvider(transport=httpx.MockTransport(handler))
+    return PrometheusProvider(transport=httpx.MockTransport(handler))
+
+
+async def test_prometheus_provider_queries_and_normalizes_metrics() -> None:
+    queries: list[str] = []
+    provider = _prom_provider(queries=queries)
     result = await provider.get_service_metrics("product-catalog", "otel-demo", 5)
 
     assert result == {
@@ -59,23 +101,91 @@ async def test_prometheus_provider_queries_and_normalizes_metrics() -> None:
         "request_rate": 12.0,
         "error_rate": 0.08,
         "latency_p95_ms": 72.5,
+        "memory_ratio": 0.5,
+        "memory_working_set_mb": 256.0,
+        "memory_limit_mb": 512.0,
+        "cpu_cores": 0.25,
+        "restarts_10m": 0,
+        "oom_killed": False,
     }
-    assert len(queries) == 3
-    assert all('service_name="product-catalog"' in query for query in queries)
-    assert all("[5m]" in query for query in queries)
+    span_queries = [q for q in queries if "traces_span_metrics" in q]
+    assert len(span_queries) == 3
+    assert all('service_name="product-catalog"' in q and "[5m]" in q for q in span_queries)
+    container_queries = [q for q in queries if "traces_span_metrics" not in q]
+    assert len(container_queries) == 7
+    assert all('container="product-catalog"' in q for q in container_queries)
+    assert all('namespace="otel-demo"' in q for q in container_queries)
+
+
+async def test_prometheus_memory_ratio_is_computed_pod_by_pod() -> None:
+    queries: list[str] = []
+    await _prom_provider(queries=queries).get_service_metrics("recommendation", "otel-demo")
+
+    ratio = next(q for q in queries if _query_name(q) == "memory_ratio")
+    # même granularité que la règle OtelDemoContainerMemoryNearLimit
+    assert "on (namespace, pod, container)" in ratio
+    assert ratio.count("max by (namespace, pod, container)") == 2
+
+
+async def test_prometheus_oom_requires_recent_restart_and_oomkilled_reason() -> None:
+    result = await _prom_provider({"restarts_10m": "2", "oom_last_terminated": "1"}) \
+        .get_service_metrics("recommendation", "otel-demo")
+    assert result["restarts_10m"] == 2
+    assert result["oom_killed"] is True
+
+    # OOMKilled ancien : la dernière terminaison l'indique, mais aucun redémarrage récent
+    old = await _prom_provider({"restarts_10m": "0", "oom_last_terminated": "1"}) \
+        .get_service_metrics("recommendation", "otel-demo")
+    assert old["oom_killed"] is False
+
+
+async def test_prometheus_cpu_ratio_absent_without_cpu_limit() -> None:
+    result = await _prom_provider({"cpu_cores": "0.8"}).get_service_metrics("ad", "otel-demo")
+    assert result["cpu_cores"] == 0.8
+    assert "cpu_ratio" not in result
+
+    limited = await _prom_provider({"cpu_cores": "0.5", "cpu_limit_cores": "1"}) \
+        .get_service_metrics("ad", "otel-demo")
+    assert limited["cpu_ratio"] == 0.5
+
+
+async def test_prometheus_provider_container_only_service_is_partial() -> None:
+    """load-generator : pas de spanmetrics, mais des métriques de conteneur exploitables."""
+    spanless = {"error_rate": None, "request_rate": None, "latency_p95_ms": None}
+    result = await _prom_provider(spanless).get_service_metrics("load-generator", "otel-demo")
+
+    assert result["status"] == "partial"
+    assert result["memory_ratio"] == 0.5
+    assert "request_rate" not in result
+    assert "error_rate" not in result
+    assert "failed" not in result
+
+
+async def test_prometheus_provider_keeps_container_data_when_spanmetrics_fail() -> None:
+    provider = _prom_provider(failing={"error_rate", "request_rate", "latency_p95_ms"})
+    result = await provider.get_service_metrics("checkout", "otel-demo")
+
+    assert result["status"] == "partial"
+    assert result["memory_ratio"] == 0.5
+    assert sorted(result["failed"]) == ["error_rate", "latency_p95_ms", "request_rate"]
+    assert "request_rate" not in result
+
+
+async def test_prometheus_provider_keeps_spanmetrics_when_container_queries_fail() -> None:
+    failing = set(_CONTAINER_ANSWERS)
+    result = await _prom_provider(failing=failing).get_service_metrics("checkout", "otel-demo")
+
+    assert result["status"] == "partial"
+    assert result["request_rate"] == 12.0
+    assert result["error_rate"] == 0.08
+    assert "memory_ratio" not in result
+    assert set(result["failed"]) == failing
 
 
 async def test_prometheus_provider_treats_absent_error_series_as_zero() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        query = request.url.params["query"]
-        if "STATUS_CODE_ERROR" in query:
-            return _prometheus_response(None)
-        if "histogram_quantile" in query:
-            return _prometheus_response("72.5")
-        return _prometheus_response("12.0")
-
-    provider = PrometheusProvider(transport=httpx.MockTransport(handler))
-    result = await provider.get_service_metrics("product-catalog", "otel-demo")
+    result = await _prom_provider({"error_rate": None}).get_service_metrics(
+        "product-catalog", "otel-demo"
+    )
 
     assert result["status"] == "success"
     assert result["error_rate"] == 0.0
@@ -84,16 +194,9 @@ async def test_prometheus_provider_treats_absent_error_series_as_zero() -> None:
 
 
 async def test_prometheus_provider_marks_missing_latency_partial() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        query = request.url.params["query"]
-        if "histogram_quantile" in query:
-            return _prometheus_response(None)
-        if "STATUS_CODE_ERROR" in query:
-            return _prometheus_response("0.08")
-        return _prometheus_response("12.0")
-
-    provider = PrometheusProvider(transport=httpx.MockTransport(handler))
-    result = await provider.get_service_metrics("product-catalog", "otel-demo")
+    result = await _prom_provider({"latency_p95_ms": None}).get_service_metrics(
+        "product-catalog", "otel-demo"
+    )
 
     assert result["status"] == "partial"
     assert result["error_rate"] == 0.08

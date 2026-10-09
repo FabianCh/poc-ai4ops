@@ -27,6 +27,7 @@ def make_collect_metrics_node(provider: MetricsProvider):
         audit_events = list(state.get("audit_events", []))
         warnings = list(state.get("warnings", []))
         errors = list(state.get("errors", []))
+        missing = list(state.get("missing_information", []))
 
         try:
             data = await provider.get_service_metrics(service, namespace)
@@ -34,10 +35,16 @@ def make_collect_metrics_node(provider: MetricsProvider):
             if status not in ("success", "partial"):
                 status = "invalid"
             metrics_data = data
+            failed = data.get("failed")
+            if failed:
+                missing.append(
+                    f"Requêtes de métriques en échec pour {service} : {', '.join(map(str, failed))}"
+                )
         except MetricsUnavailableError as exc:
             status = "unavailable"
             metrics_data = {}
             warnings.append(f"Métriques indisponibles pour {service} : {exc}")
+            missing.append(f"Métriques indisponibles pour {service} : {exc.reason}")
         except Exception as exc:  # noqa: BLE001
             status = "invalid"
             metrics_data = {}
@@ -76,6 +83,7 @@ def make_collect_metrics_node(provider: MetricsProvider):
             "audit_events": audit_events,
             "warnings": warnings,
             "errors": errors,
+            "missing_information": missing,
         }
 
     return collect_metrics_node

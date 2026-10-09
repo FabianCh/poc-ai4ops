@@ -50,6 +50,11 @@ def _build_metrics_observation(data: dict[str, Any]) -> MetricsObservation | Non
         cpu_ratio=data.get("cpu_ratio"),
         memory_ratio=data.get("memory_ratio"),
         request_rate=data.get("request_rate"),
+        cpu_cores=data.get("cpu_cores"),
+        memory_working_set_mb=data.get("memory_working_set_mb"),
+        memory_limit_mb=data.get("memory_limit_mb"),
+        restarts_10m=data.get("restarts_10m"),
+        oom_killed=data.get("oom_killed"),
         window_minutes=data.get("window_minutes", 15),
     )
 

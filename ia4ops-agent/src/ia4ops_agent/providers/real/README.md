@@ -28,11 +28,24 @@ confirmées pour `product-catalog` :
 - `traces_span_metrics_calls_total` pour calculer le débit de requêtes ;
 - `traces_span_metrics_duration_milliseconds_bucket` pour calculer le p95 en millisecondes.
 
-Les requêtes utilisent la fenêtre passée à `get_service_metrics` (15 minutes par défaut).
+Les requêtes spanmetrics utilisent la fenêtre passée à `get_service_metrics` (15 minutes par défaut).
 La règle d'alerte utilise une fenêtre de 5 minutes ; le provider ne prétend donc pas reproduire
-exactement son seuil temporel. Si certaines séries sont absentes, le résultat porte
-`status="partial"` ; si aucune des métriques n'est disponible, `MetricsUnavailableError` est
-levée. Les mesures CPU/mémoire des pods ne sont pas encore incluses.
+exactement son seuil temporel.
+
+Les métriques de **conteneur** (cAdvisor + kube-state-metrics, le conteneur porte le nom du
+service) reprennent la granularité des règles `otel-demo.containers` :
+
+- `memory_ratio` : usage / limite mémoire calculé **pod par pod** (`on(namespace, pod, container)`),
+  puis pire pod du service ; `memory_working_set_mb` et `memory_limit_mb` en valeurs brutes ;
+- `cpu_cores` : cœurs consommés (fenêtre 5 min). `cpu_ratio` n'est renseigné que s'il existe une
+  limite CPU, ce qui n'est pas le cas dans l'OTel Demo ;
+- `restarts_10m` et `oom_killed` (redémarrage sur 10 min **et** dernière terminaison `OOMKilled`,
+  comme `OtelDemoContainerOOMKilled`).
+
+Les deux familles sont indépendantes : une requête en échec n'annule pas les autres et figure dans
+`failed` (reprise dans `missing_information`). Statut : `success` si les deux familles sont
+complètes, `partial` si une famille ou une requête manque (ex. `load-generator`, sans spanmetrics),
+`MetricsUnavailableError` seulement si aucune métrique n'est obtenue.
 
 ## Loki
 
