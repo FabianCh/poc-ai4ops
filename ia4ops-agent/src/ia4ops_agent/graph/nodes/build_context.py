@@ -23,7 +23,6 @@ from ia4ops_agent.domain.context import (
 )
 from ia4ops_agent.graph.state import IncidentState, SourceStatus
 
-
 _MAX_ANNOTATION_LENGTH = 300
 
 
