@@ -88,7 +88,7 @@ async def validate_node(state: IncidentState) -> dict[str, Any]:
         )
 
     # Contrôle 7 : sources unavailable → missing_information
-    for src in ("metrics", "logs", "cluster"):
+    for src in ("metrics", "logs", "traces", "cluster"):
         sts = state.get(f"{src}_status", "not_started")
         if sts in ("unavailable", "invalid"):
             marker = f"Source {src} : {sts}"

@@ -17,7 +17,12 @@ from html import escape
 from typing import Any
 from urllib.parse import quote
 
-_SOURCE_LABELS = {"metrics": "métriques", "logs": "logs", "cluster": "Kubernetes"}
+_SOURCE_LABELS = {
+    "metrics": "métriques",
+    "logs": "logs",
+    "traces": "traces",
+    "cluster": "Kubernetes",
+}
 _ELLIPSIS = "…"
 
 

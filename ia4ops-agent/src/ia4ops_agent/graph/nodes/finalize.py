@@ -38,6 +38,7 @@ def make_finalize_node(audit_writer: AuditWriter):
             "source_status": {
                 "metrics": state.get("metrics_status", "not_started"),
                 "logs": state.get("logs_status", "not_started"),
+                "traces": state.get("traces_status", "not_started"),
                 "cluster": state.get("cluster_status", "not_started"),
             },
             "missing_information": missing,
