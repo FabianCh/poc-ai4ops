@@ -72,6 +72,37 @@ class LogsProvider(Protocol):
 
 
 @runtime_checkable
+class TracesProvider(Protocol):
+    """
+    Fournit une synthèse bornée des traces en erreur d'un service.
+    Implémentations : MockTracesProvider, JaegerProvider.
+    """
+
+    async def get_error_traces(
+        self,
+        service: str,
+        namespace: str,
+        window_minutes: int = 15,
+    ) -> dict[str, Any]:
+        """
+        Retourne la synthèse des traces en erreur.
+
+        Sortie attendue :
+        {
+            "error_trace_count": int,
+            "top_error_spans": list[dict],      # service, operation, count, status_description…
+            "services_in_error_chain": list[str],  # de l'amont vers l'aval
+            "max_duration_ms": float,
+            "sample_trace_ids": list[str],      # identifiants de trace (32 hex), 3 au plus
+            "status": "success",
+        }
+
+        En cas d'indisponibilité, lever TracesUnavailableError.
+        """
+        ...
+
+
+@runtime_checkable
 class ClusterProvider(Protocol):
     """
     Fournit l'état du workload Kubernetes et les événements cluster.
@@ -141,6 +172,13 @@ class MetricsUnavailableError(ProviderUnavailableError):
 
     def __init__(self, reason: str = "") -> None:
         super().__init__("metrics", reason)
+
+
+class TracesUnavailableError(ProviderUnavailableError):
+    """Spécialisation pour Jaeger/traces."""
+
+    def __init__(self, reason: str = "") -> None:
+        super().__init__("traces", reason)
 
 
 class ClusterUnavailableError(ProviderUnavailableError):

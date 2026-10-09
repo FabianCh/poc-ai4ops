@@ -63,6 +63,23 @@ class LogsObservation(BaseModel):
     window_minutes: int = 15
 
 
+class TracesObservation(BaseModel):
+    """Synthèse bornée des traces en erreur (champs de liste blanche uniquement)."""
+
+    error_trace_count: int = 0
+    top_error_spans: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Spans en erreur les plus fréquents (service, opération, message tronqué)",
+    )
+    services_in_error_chain: list[str] = Field(
+        default_factory=list, description="Services en erreur, de l'amont vers l'aval"
+    )
+    max_duration_ms: float | None = None
+    sample_trace_ids: list[str] = Field(default_factory=list)
+    truncated: bool = False
+    window_minutes: int = 15
+
+
 class KubernetesObservation(BaseModel):
     """État du workload Kubernetes au moment de l'alerte."""
 
@@ -81,6 +98,7 @@ class Observations(BaseModel):
 
     metrics: MetricsObservation | None = None
     logs: LogsObservation | None = None
+    traces: TracesObservation | None = None
     kubernetes: KubernetesObservation | None = None
 
 
@@ -89,6 +107,7 @@ class SourceStatuses(BaseModel):
 
     metrics: SourceStatus = "not_started"
     logs: SourceStatus = "not_started"
+    traces: SourceStatus = "not_started"
     cluster: SourceStatus = "not_started"
 
 

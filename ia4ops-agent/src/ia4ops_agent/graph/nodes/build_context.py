@@ -19,6 +19,7 @@ from ia4ops_agent.domain.context import (
     MetricsObservation,
     Observations,
     SourceStatuses,
+    TracesObservation,
 )
 from ia4ops_agent.graph.state import IncidentState, SourceStatus
 
@@ -85,6 +86,20 @@ def _build_logs_observation(logs: list[dict[str, Any]]) -> LogsObservation | Non
     )
 
 
+def _build_traces_observation(data: dict[str, Any]) -> TracesObservation | None:
+    if not data:
+        return None
+    return TracesObservation(
+        error_trace_count=data.get("error_trace_count", 0),
+        top_error_spans=list(data.get("top_error_spans", []))[:5],
+        services_in_error_chain=list(data.get("services_in_error_chain", []))[:6],
+        max_duration_ms=data.get("max_duration_ms"),
+        sample_trace_ids=list(data.get("sample_trace_ids", []))[:3],
+        truncated=bool(data.get("truncated", False)),
+        window_minutes=data.get("window_minutes", 15),
+    )
+
+
 def _build_k8s_observation(data: dict[str, Any]) -> KubernetesObservation | None:
     if not data:
         return None
@@ -105,10 +120,12 @@ async def build_context_node(state: IncidentState) -> dict[str, Any]:
 
     metrics_status: SourceStatus = state.get("metrics_status", "not_started")
     logs_status: SourceStatus = state.get("logs_status", "not_started")
+    traces_status: SourceStatus = state.get("traces_status", "not_started")
     cluster_status: SourceStatus = state.get("cluster_status", "not_started")
 
     metrics_obs = _build_metrics_observation(state.get("metrics_data", {}))
     logs_obs = _build_logs_observation(state.get("logs_data", []))
+    traces_obs = _build_traces_observation(state.get("traces_data", {}))
     cluster_obs = _build_k8s_observation(state.get("cluster_data", {}))
 
     ctx = IncidentContext(
@@ -127,11 +144,13 @@ async def build_context_node(state: IncidentState) -> dict[str, Any]:
         observations=Observations(
             metrics=metrics_obs,
             logs=logs_obs,
+            traces=traces_obs,
             kubernetes=cluster_obs,
         ),
         source_status=SourceStatuses(
             metrics=metrics_status,
             logs=logs_status,
+            traces=traces_status,
             cluster=cluster_status,
         ),
         known_missing=list(state.get("missing_information", [])),
@@ -146,11 +165,13 @@ async def build_context_node(state: IncidentState) -> dict[str, Any]:
         input_summary={
             "metrics_status": metrics_status,
             "logs_status": logs_status,
+            "traces_status": traces_status,
             "cluster_status": cluster_status,
         },
         output_summary={
             "has_metrics": metrics_obs is not None,
             "has_logs": logs_obs is not None,
+            "has_traces": traces_obs is not None,
             "has_kubernetes": cluster_obs is not None,
             "known_missing_count": len(ctx.known_missing),
         },
@@ -164,6 +185,7 @@ async def build_context_node(state: IncidentState) -> dict[str, Any]:
         source_status={
             "metrics": metrics_status,
             "logs": logs_status,
+            "traces": traces_status,
             "cluster": cluster_status,
         },
         context=context_for_llm,

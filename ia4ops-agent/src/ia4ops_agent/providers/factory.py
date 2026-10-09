@@ -5,8 +5,8 @@ Principe : le workflow ne connaît que les interfaces (Protocols).
 La factory résout les dépendances concrètes au démarrage de l'application.
 
 Variable de contrôle : DATA_PROVIDER (dans .env)
-  "mock" → MockMetricsProvider, MockLogsProvider, MockClusterProvider
-  "real" → PrometheusProvider, LokiProvider, KubernetesProvider
+  "mock" → MockMetricsProvider, MockLogsProvider, MockTracesProvider, MockClusterProvider
+  "real" → PrometheusProvider, LokiProvider, JaegerProvider, KubernetesProvider
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ if TYPE_CHECKING:
         ClusterProvider,
         LogsProvider,
         MetricsProvider,
+        TracesProvider,
     )
 
 
@@ -53,6 +54,17 @@ def get_logs_provider() -> LogsProvider:
     return LokiProvider()
 
 
+def get_traces_provider() -> TracesProvider:
+    """Retourne le TracesProvider approprié selon DATA_PROVIDER."""
+    mode = _get_data_provider_mode()
+    if mode == "mock":
+        from ia4ops_agent.providers.mock.traces import MockTracesProvider
+        return MockTracesProvider()
+
+    from ia4ops_agent.providers.real.jaeger import JaegerProvider
+    return JaegerProvider()
+
+
 def get_cluster_provider() -> ClusterProvider:
     """Retourne le ClusterProvider approprié selon DATA_PROVIDER."""
     mode = _get_data_provider_mode()
@@ -75,10 +87,12 @@ class Providers:
         metrics: MetricsProvider | None = None,
         logs: LogsProvider | None = None,
         cluster: ClusterProvider | None = None,
+        traces: TracesProvider | None = None,
     ) -> None:
         self.metrics = metrics or get_metrics_provider()
         self.logs = logs or get_logs_provider()
         self.cluster = cluster or get_cluster_provider()
+        self.traces = traces or get_traces_provider()
 
     @classmethod
     def from_env(cls) -> Providers:
@@ -91,9 +105,11 @@ class Providers:
         from ia4ops_agent.providers.mock.cluster import MockClusterProvider
         from ia4ops_agent.providers.mock.logs import MockLogsProvider
         from ia4ops_agent.providers.mock.metrics import MockMetricsProvider
+        from ia4ops_agent.providers.mock.traces import MockTracesProvider
 
         return cls(
             metrics=MockMetricsProvider(),
             logs=MockLogsProvider(),
             cluster=MockClusterProvider(),
+            traces=MockTracesProvider(),
         )

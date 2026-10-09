@@ -18,10 +18,13 @@ from ia4ops_agent.providers.interfaces import (
     LogsProvider,
     LogsUnavailableError,
     MetricsProvider,
+    TracesProvider,
 )
 from ia4ops_agent.providers.mock.cluster import MockClusterProvider
 from ia4ops_agent.providers.mock.logs import MockLogsProvider
 from ia4ops_agent.providers.mock.metrics import MockMetricsProvider
+from ia4ops_agent.providers.mock.traces import MockTracesProvider
+from ia4ops_agent.providers.real.jaeger import JaegerProvider
 from ia4ops_agent.providers.real.kubernetes import KubernetesProvider
 from ia4ops_agent.providers.real.loki import LokiProvider
 from ia4ops_agent.providers.real.prometheus import PrometheusProvider
@@ -216,6 +219,7 @@ class TestProvidersFactory:
         assert isinstance(providers.metrics, MockMetricsProvider)
         assert isinstance(providers.logs, MockLogsProvider)
         assert isinstance(providers.cluster, MockClusterProvider)
+        assert isinstance(providers.traces, MockTracesProvider)
 
     def test_from_env_with_mock_mode(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("DATA_PROVIDER", "mock")
@@ -247,6 +251,7 @@ class TestProvidersFactory:
         assert isinstance(providers.metrics, PrometheusProvider)
         assert isinstance(providers.logs, LokiProvider)
         assert isinstance(providers.cluster, KubernetesProvider)
+        assert isinstance(providers.traces, JaegerProvider)
 
     def test_invalid_data_provider_is_rejected(
         self, monkeypatch: pytest.MonkeyPatch
@@ -261,6 +266,7 @@ class TestProvidersFactory:
         assert isinstance(providers.metrics, MetricsProvider)
         assert isinstance(providers.logs, LogsProvider)
         assert isinstance(providers.cluster, ClusterProvider)
+        assert isinstance(providers.traces, TracesProvider)
 
     def test_custom_injection(self) -> None:
         """On peut injecter des providers arbitraires pour les tests."""

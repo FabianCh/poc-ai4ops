@@ -139,7 +139,7 @@ async def test_trace_events_capture_collection_and_diagnosis(
 
 
 def _expected_steps(case: str) -> list[str]:
-    base = ["initialize", "collect_metrics", "collect_logs", "collect_cluster",
+    base = ["initialize", "collect_metrics", "collect_traces", "collect_logs", "collect_cluster",
             "build_context", "diagnose", "validate", "finalize"]
     return base
 

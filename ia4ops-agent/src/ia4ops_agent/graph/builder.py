@@ -6,7 +6,7 @@ les dépendances (providers, LLMClient, AuditWriter). Le workflow ne connaît
 jamais les implémentations concrètes.
 
 Flux nominal :
-  START → initialize → collect_metrics → collect_logs → collect_cluster
+  START → initialize → collect_metrics → collect_traces → collect_logs → collect_cluster
         → build_context → diagnose → validate → finalize → END
 
 Branche Watchdog :
@@ -22,6 +22,7 @@ from ia4ops_agent.graph.nodes.build_context import build_context_node
 from ia4ops_agent.graph.nodes.collect_cluster import make_collect_cluster_node
 from ia4ops_agent.graph.nodes.collect_logs import make_collect_logs_node
 from ia4ops_agent.graph.nodes.collect_metrics import make_collect_metrics_node
+from ia4ops_agent.graph.nodes.collect_traces import make_collect_traces_node
 from ia4ops_agent.graph.nodes.diagnose import make_diagnose_node
 from ia4ops_agent.graph.nodes.finalize import make_finalize_node
 from ia4ops_agent.graph.nodes.initialize import initialize_node
@@ -30,6 +31,7 @@ from ia4ops_agent.graph.routing import (
     route_after_collect_cluster,
     route_after_collect_logs,
     route_after_collect_metrics,
+    route_after_collect_traces,
     route_after_initialize,
     route_after_validate,
 )
@@ -63,6 +65,7 @@ def build_graph(
 
     # Instancier les nœuds avec leurs dépendances
     collect_metrics = make_collect_metrics_node(providers.metrics)
+    collect_traces = make_collect_traces_node(providers.traces)
     collect_logs = make_collect_logs_node(providers.logs)
     collect_cluster = make_collect_cluster_node(providers.cluster)
     diagnose = make_diagnose_node(llm_client)
@@ -74,6 +77,7 @@ def build_graph(
     # Ajouter les nœuds
     graph.add_node("initialize", initialize_node)
     graph.add_node("collect_metrics", collect_metrics)
+    graph.add_node("collect_traces", collect_traces)
     graph.add_node("collect_logs", collect_logs)
     graph.add_node("collect_cluster", collect_cluster)
     graph.add_node("build_context", build_context_node)
@@ -100,6 +104,11 @@ def build_graph(
     graph.add_conditional_edges(
         "collect_metrics",
         route_after_collect_metrics,
+        {"collect_traces": "collect_traces"},
+    )
+    graph.add_conditional_edges(
+        "collect_traces",
+        route_after_collect_traces,
         {"collect_logs": "collect_logs"},
     )
     graph.add_conditional_edges(

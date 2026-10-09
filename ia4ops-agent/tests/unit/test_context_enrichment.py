@@ -132,3 +132,67 @@ def test_unavailable_metrics_are_reported_as_missing_information() -> None:
     result = _collect_metrics(MetricsUnavailableError("Prometheus injoignable"))
     assert result["metrics_status"] == "unavailable"
     assert any("Prometheus injoignable" in line for line in result["missing_information"])
+
+
+# --- Point 3 : traces en erreur ---------------------------------------------------------
+
+
+class _FakeTraces:
+    def __init__(self, data: dict[str, Any] | Exception) -> None:
+        self._data = data
+
+    async def get_error_traces(self, service: str, namespace: str, window_minutes: int = 15):
+        if isinstance(self._data, Exception):
+            raise self._data
+        return self._data
+
+
+def _collect_traces(data: dict[str, Any] | Exception) -> dict[str, Any]:
+    from ia4ops_agent.graph.nodes.collect_traces import make_collect_traces_node
+
+    node = make_collect_traces_node(_FakeTraces(data))
+    state = {"incident_id": "inc-1", "normalized_alert": _normalized(), "audit_events": []}
+    return asyncio.run(node(state))
+
+
+def test_unavailable_traces_do_not_block_and_are_reported() -> None:
+    from ia4ops_agent.providers.interfaces import TracesUnavailableError
+
+    result = _collect_traces(TracesUnavailableError("Jaeger injoignable"))
+    assert result["traces_status"] == "unavailable"
+    assert result["traces_data"] == {}
+    assert any("Jaeger injoignable" in line for line in result["missing_information"])
+
+
+def test_context_carries_bounded_traces_and_status() -> None:
+    data = {
+        "status": "success", "error_trace_count": 14, "truncated": False, "window_minutes": 15,
+        "top_error_spans": [{"service": f"s{i}", "operation": "op", "count": 1} for i in range(9)],
+        "services_in_error_chain": ["frontend", "checkout", "product-catalog"],
+        "max_duration_ms": 12.5,
+        "sample_trace_ids": ["a" * 32] * 5,
+    }
+    ctx = _build(_normalized(), traces_status="success", traces_data=data)
+    traces = ctx["observations"]["traces"]
+    assert traces["error_trace_count"] == 14
+    assert len(traces["top_error_spans"]) == 5
+    assert len(traces["sample_trace_ids"]) == 3
+    assert traces["services_in_error_chain"][-1] == "product-catalog"
+    assert ctx["source_status"]["traces"] == "success"
+
+
+def test_context_without_traces_keeps_status_only() -> None:
+    ctx = _build(_normalized(), traces_status="unavailable", traces_data={})
+    assert "traces" not in ctx["observations"]
+    assert ctx["source_status"]["traces"] == "unavailable"
+
+
+def test_graph_order_runs_traces_before_logs() -> None:
+    from ia4ops_agent.graph.builder import build_graph
+    from ia4ops_agent.providers.factory import Providers
+
+    graph = build_graph(providers=Providers.mock()).get_graph()
+    edges = {(e.source, e.target) for e in graph.edges}
+    assert ("collect_metrics", "collect_traces") in edges
+    assert ("collect_traces", "collect_logs") in edges
+    assert ("collect_logs", "collect_cluster") in edges

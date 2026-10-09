@@ -24,8 +24,16 @@ def route_after_initialize(state: IncidentState) -> str:
 
 def route_after_collect_metrics(state: IncidentState) -> str:
     """
-    Après collect_metrics : toujours continuer vers collect_logs.
+    Après collect_metrics : toujours continuer vers collect_traces.
     Même si métriques unavailable/invalid, le graphe poursuit.
+    """
+    return "collect_traces"
+
+
+def route_after_collect_traces(state: IncidentState) -> str:
+    """
+    Après collect_traces : toujours continuer vers collect_logs.
+    Traces indisponibles : les logs sont collectés sans identifiants de trace.
     """
     return "collect_logs"
 

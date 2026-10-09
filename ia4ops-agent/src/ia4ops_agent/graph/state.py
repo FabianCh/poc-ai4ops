@@ -35,6 +35,10 @@ class IncidentState(TypedDict, total=False):
     metrics_status: SourceStatus
     metrics_data: dict[str, Any]
 
+    # --- Collecte traces en erreur (synthèse bornée) ---
+    traces_status: SourceStatus
+    traces_data: dict[str, Any]
+
     # --- Collecte logs ---
     logs_status: SourceStatus
     logs_data: list[dict[str, Any]]

@@ -235,7 +235,7 @@ def test_graph_nodes_are_read_only() -> None:
     graph = build_graph(providers=Providers.mock())
     node_names = list(graph.nodes)
     expected_read_only_nodes = {
-        "initialize", "collect_metrics", "collect_logs", "collect_cluster",
+        "initialize", "collect_metrics", "collect_traces", "collect_logs", "collect_cluster",
         "build_context", "diagnose", "validate", "finalize", "end_watchdog",
     }
     for node in node_names:
