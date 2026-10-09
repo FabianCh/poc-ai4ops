@@ -80,8 +80,9 @@ POST /webhooks/alertmanager  (Alertmanager webhook v4)
 [Réponse 200 immédiate]
         ↓ (arrière-plan)
 [Workflow LangGraph]
-   ├── collect_metrics  (Prometheus)
-   ├── collect_logs     (Loki)
+   ├── collect_metrics  (Prometheus : spanmetrics + conteneur)
+   ├── collect_traces   (Jaeger : traces en erreur)
+   ├── collect_logs     (Loki : error/warn, erreurs en INFO, logs des traces en erreur)
    ├── collect_cluster  (Kubernetes API)
    ├── build_context
    ├── diagnose         (Gemini Flash / FakeLLM)
@@ -92,6 +93,24 @@ GET /api/v1/incidents/{incident_id}
 ```
 
 Voir `docs/architecture.md` pour le diagramme complet.
+
+### Sources du contexte de diagnostic
+
+Toutes les sources passent par le proxy Grafana (mêmes identifiants, aucun droit Kubernetes).
+Chaque source est non bloquante : en cas d'échec, elle passe `unavailable` et figure dans
+`known_missing`. Le contexte transmis à Gemini est borné.
+
+| Source | Contenu retenu |
+|---|---|
+| Alerte | nom, service, sévérité, `startsAt`, taille du groupe, annotations `summary`/`description`/`runbook_url` (≤ 300 car.) |
+| Prometheus | taux d'erreur, p95, débit (spanmetrics) ; mémoire (ratio par pod, octets), CPU (cœurs), redémarrages et OOMKilled sur 10 min |
+| Jaeger | nombre de traces en erreur, top 5 spans en erreur (service, opération, message tronqué à 200 car., codes de statut), chaîne de services, ≤ 3 identifiants de trace |
+| Loki | lignes error/warn du service, lignes dont le contenu évoque une panne (même en INFO), lignes error/warn des traces en erreur (tous services) ; top 5 motifs |
+| Kubernetes | non disponible (provider réel hors périmètre) |
+
+Les annotations, messages de traces et logs sont des données non fiables : le prompt système
+interdit de suivre toute instruction qui s'y trouve, et seuls des champs d'une liste blanche sont
+copiés depuis Jaeger.
 
 ## Variables d'environnement
 

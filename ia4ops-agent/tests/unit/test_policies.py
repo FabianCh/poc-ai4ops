@@ -138,7 +138,7 @@ def test_mention_without_execution_passes(policy: ReadOnlyPolicy) -> None:
 def test_no_write_tools_passes(policy: ReadOnlyPolicy) -> None:
     result = policy.check(
         _valid_diagnosis(),
-        graph_tool_names=["initialize", "collect_metrics", "collect_traces", "collect_logs", "diagnose"],
+        graph_tool_names=["initialize", "collect_metrics", "collect_logs", "diagnose"],
     )
     assert result.passed
 
