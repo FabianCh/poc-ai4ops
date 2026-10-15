@@ -1,0 +1,35 @@
+{
+  "version": "4",
+  "groupKey": "{}/{namespace=\"otel-demo\"}:{alertname=\"OtelDemoServiceHighErrorRate\"}",
+  "truncatedAlerts": 0,
+  "status": "firing",
+  "receiver": "ai4ops-agent",
+  "groupLabels": { "namespace": "otel-demo" },
+  "commonLabels": {
+    "namespace": "otel-demo",
+    "alertname": "OtelDemoServiceHighErrorRate"
+  },
+  "commonAnnotations": {},
+  "externalURL": "http://alertmanager:9093",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "OtelDemoServiceHighErrorRate",
+        "namespace": "otel-demo",
+        "severity": "critical",
+        "service_name": "checkout"
+      },
+      "annotations": {
+        "summary": "High error rate on checkout",
+        "description": "Error rate exceeded 5% threshold for 2 minutes."
+      },
+      "startsAt": "2026-10-02T19:05:00Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://prometheus/graph?g0.expr=error_rate",
+      "fingerprint": "case-b-fp-001"
+    }
+  ],
+  "_mock_scenario": "case_b",
+  "_description": "Cas B : pod non-ready + redémarrages fréquents + événements Kubernetes cohérents + logs avec erreur de démarrage. Diagnostic attendu : instabilité applicative ou échec au démarrage."
+}
