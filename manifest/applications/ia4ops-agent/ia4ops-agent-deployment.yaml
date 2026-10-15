@@ -1,6 +1,6 @@
 ---
 # Agent IA de diagnostic (lecture seule) : reçoit les webhooks Alertmanager.
-# Gemini sélectionné pour le prochain test ; métriques et logs collectés via Grafana.
+# LLM mock pour éviter les appels Vertex AI ; métriques et logs restent réels via Grafana.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -33,7 +33,7 @@ spec:
         image: ghcr.io/fabianch/poc-ai4ops/ia4ops-agent
         env:
         - name: LLM_PROVIDER
-          value: gemini
+          value: mock
         - name: DATA_PROVIDER
           value: real
         - name: GRAFANA_BASE_URL
@@ -62,14 +62,6 @@ spec:
               optional: true
         - name: AUDIT_DIR
           value: /app/audit_logs
-        - name: GOOGLE_APPLICATION_CREDENTIALS
-          value: /var/run/google/service-account.json
-        - name: GOOGLE_CLOUD_PROJECT
-          value: wavestone-cto-ai4ops
-        - name: VERTEX_AI_LOCATION
-          value: europe-west1
-        - name: LLM_MODEL
-          value: gemini-2.5-flash
         # Racine en lecture seule et utilisateur sans home : caches éventuels dans /tmp
         - name: HOME
           value: /tmp
@@ -105,19 +97,9 @@ spec:
           mountPath: /app/audit_logs
         - name: tmp
           mountPath: /tmp
-        - name: google-credentials
-          mountPath: /var/run/google
-          readOnly: true
       volumes:
       - name: audit
         persistentVolumeClaim:
           claimName: ia4ops-agent-audit
       - name: tmp
         emptyDir: {}
-      - name: google-credentials
-        secret:
-          secretName: model-garden-credentials
-          defaultMode: 0440
-          items:
-          - key: service-account.json
-            path: service-account.json
