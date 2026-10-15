@@ -26,6 +26,8 @@ class IncidentState(TypedDict, total=False):
     incident_id: str
     correlation_id: str  # lié au groupKey Alertmanager
     received_at: str  # ISO 8601
+    window_minutes: int
+    investigation_question: str
 
     # --- Alerte brute et normalisée ---
     raw_alert: dict[str, Any]        # payload Alertmanager v4 original (dict)

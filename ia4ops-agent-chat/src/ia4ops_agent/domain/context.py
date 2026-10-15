@@ -130,6 +130,7 @@ class IncidentContext(BaseModel):
     source_status: SourceStatuses = Field(default_factory=SourceStatuses)
     # Informations manquantes identifiées avant même le diagnostic
     known_missing: list[str] = Field(default_factory=list)
+    operator_question: str | None = Field(default=None, max_length=500)
 
     def to_llm_dict(self) -> dict[str, Any]:
         """
@@ -146,10 +147,8 @@ class IncidentContext(BaseModel):
         if logs is not None:
             # identifiants de traçabilité : conservés dans l'audit, inutiles pour le modèle
             logs.pop("sample_event_ids", None)
-            logs.pop("window_minutes", None)
         traces = observations.get("traces")
         if traces is not None:
-            traces.pop("window_minutes", None)
             if not traces.get("truncated"):
                 traces.pop("truncated", None)
         return data

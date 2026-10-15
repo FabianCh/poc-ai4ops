@@ -14,7 +14,9 @@ Usage :
 import logging
 from collections import OrderedDict
 from contextlib import asynccontextmanager
+from pathlib import Path
 
+from chainlit.utils import mount_chainlit
 from fastapi import FastAPI
 
 from ia4ops_agent.api.routes import router
@@ -110,8 +112,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="IA4Ops Agent Chat",
     description=(
-        "Copie expérimentale de l'agent IA4Ops, destinée à la future interface chatbot. "
-        "Le backend de diagnostic hérité reste en lecture seule."
+        "Interface Chainlit et API d'investigation IA4Ops. "
+        "Les diagnostics restent en lecture seule."
     ),
     version=settings.app_version,
     lifespan=lifespan,
@@ -120,6 +122,11 @@ app = FastAPI(
 )
 
 app.include_router(router)
+mount_chainlit(
+    app=app,
+    target=str(Path(__file__).with_name("chat_app.py")),
+    path="/chat",
+)
 
 
 # ---------------------------------------------------------------------------

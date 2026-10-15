@@ -23,6 +23,7 @@ def make_collect_metrics_node(provider: MetricsProvider):
         normalized = state["normalized_alert"]
         service = normalized.get("service", "unknown")
         namespace = normalized.get("namespace", "otel-demo")
+        window_minutes = state.get("window_minutes", 15)
 
         audit_events = list(state.get("audit_events", []))
         warnings = list(state.get("warnings", []))
@@ -30,7 +31,9 @@ def make_collect_metrics_node(provider: MetricsProvider):
         missing = list(state.get("missing_information", []))
 
         try:
-            data = await provider.get_service_metrics(service, namespace)
+            data = await provider.get_service_metrics(
+                service, namespace, window_minutes=window_minutes
+            )
             status = data.get("status", "success")
             if status not in ("success", "partial"):
                 status = "invalid"
@@ -56,7 +59,11 @@ def make_collect_metrics_node(provider: MetricsProvider):
             incident_id=incident_id,
             step="collect_metrics",
             status=status,
-            input_summary={"service": service, "namespace": namespace},
+            input_summary={
+                "service": service,
+                "namespace": namespace,
+                "window_minutes": window_minutes,
+            },
             output_summary={"status": status, "keys": list(metrics_data.keys())},
             duration_ms=duration_ms,
             error=(

@@ -38,6 +38,9 @@ coverage.xml
 # Audit trail local (données de runtime, pas du code)
 audit_logs/
 
+# Chainlit generates bundled translations locally; runtime defaults ship with the package.
+.chainlit/translations/
+
 # IDE
 .idea/
 .vscode/

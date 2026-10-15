@@ -484,3 +484,62 @@ async def test_health_returns_200(client: AsyncClient) -> None:
     resp = await client.get("/health")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
+
+
+async def test_chainlit_is_mounted_on_fastapi(client: AsyncClient) -> None:
+    response = await client.get("/chat/")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
+
+async def test_manual_investigation_runs_graph_with_requested_window(
+    client: AsyncClient,
+) -> None:
+    class RecordingPublisher:
+        published = False
+
+        async def publish_diagnosis(self, **kwargs: Any) -> str:
+            self.published = True
+            return "unexpected-keep-incident"
+
+    publisher = RecordingPublisher()
+    app.state.keep_publisher = publisher
+    response = await client.post(
+        "/api/v1/investigations",
+        json={
+            "service": "product-catalog",
+            "window_minutes": 7,
+            "question": "Pourquoi le taux d'erreur augmente-t-il ?",
+        },
+    )
+    assert response.status_code == 202
+    incident_id = response.json()["incident_id"]
+
+    result = await _wait_for_completion(client, incident_id)
+    report = result["report"]
+    context = report["context"]
+
+    assert result["status"] in {"completed", "completed_with_errors"}
+    assert report["action_executed"] is False
+    assert report["window_minutes"] == 7
+    assert context["incident"]["service"] == "product-catalog"
+    assert context["operator_question"] == "Pourquoi le taux d'erreur augmente-t-il ?"
+    assert context["observations"]["metrics"]["window_minutes"] == 7
+    assert context["observations"]["logs"]["window_minutes"] == 7
+    assert publisher.published is False
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"service": "product/catalog", "window_minutes": 15, "question": "Pourquoi ?"},
+        {"service": "checkout", "window_minutes": 61, "question": "Pourquoi ?"},
+        {"service": "checkout", "window_minutes": 15, "question": "   "},
+    ],
+)
+async def test_manual_investigation_rejects_invalid_parameters(
+    client: AsyncClient,
+    payload: dict[str, Any],
+) -> None:
+    response = await client.post("/api/v1/investigations", json=payload)
+    assert response.status_code == 422

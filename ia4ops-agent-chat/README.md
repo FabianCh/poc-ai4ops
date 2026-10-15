@@ -3,9 +3,9 @@
 Cette application est une **copie indépendante** de `ia4ops-agent`, créée pour développer une
 interface chatbot Chainlit sans modifier l'agent stable.
 
-> **État initial** : le backend FastAPI/LangGraph a été dupliqué depuis le commit stable
-> `ebc2221`. L'interface Chainlit, le webhook dédié et le déploiement isolé ne sont pas encore
-> implémentés. Ce projet est distinct et ne remplace pas `ia4ops-agent`.
+> **État** : copie indépendante créée depuis le commit stable `ebc2221`. L'interface Chainlit
+> et le parcours d'investigation manuelle sont en cours ; le webhook d'alertes en attente et le
+> déploiement isolé restent à faire. Ce projet ne remplace pas `ia4ops-agent`.
 
 Le diagnostic reste en lecture seule. Pendant le développement, le LLM doit rester en mock ;
 les providers de données Prometheus/Loki peuvent être configurés séparément en réel.
@@ -25,17 +25,42 @@ Copy-Item .env.example .env
 Renseigner les accès Grafana uniquement pour tester les providers réels. Ne jamais copier ni
 committer de fichier `.env`, de credential ou de données d'audit de l'agent stable.
 
-## Démarrage du backend hérité
+## Démarrage local
 
 ```powershell
 uv run uvicorn ia4ops_agent.main:app --reload --port 8000
 ```
 
-Le LLM est mocké par défaut (`LLM_PROVIDER=mock`) ; aucune requête Vertex AI n'est effectuée.
-Les providers Prometheus et Loki se configurent indépendamment via `DATA_PROVIDER=real` et les
-variables `GRAFANA_*`. Le provider Kubernetes réel n'est pas implémenté.
+L'API est disponible sur `http://localhost:8000`, sa documentation sur `/docs` et le chatbot sur
+[`/chat/`](http://localhost:8000/chat/).
 
-> La commande ci-dessus démarre uniquement l'API FastAPI héritée. L'IHM Chainlit reste à créer.
+### Demander une investigation
+
+Dans le chat, saisir une commande structurée :
+
+```text
+/investigate <service> [minutes] | <question>
+```
+
+Exemple :
+
+```text
+/investigate product-catalog 15 | Pourquoi le taux d'erreur augmente ?
+```
+
+La durée est de 15 minutes par défaut et doit être comprise entre 1 et 60 minutes. Le namespace
+est actuellement fixé à `otel-demo`. Le service est traité comme un identifiant, pas comme une
+requête LogQL/PromQL. L'API `POST /api/v1/investigations` valide la demande, démarre le graphe en
+arrière-plan et retourne un identifiant consultable via `GET /api/v1/incidents/{incident_id}`.
+
+`LLM_PROVIDER=mock` est le défaut et n'appelle pas Vertex AI. Le diagnostic FakeLLM est préconfiguré
+et ne reflète pas nécessairement les données de la collecte ; l'IHM avertit l'opérateur et affiche
+séparément les observations issues des providers. `DATA_PROVIDER=mock` (défaut) produit aussi des
+observations synthétiques. `DATA_PROVIDER=real` active Prometheus/Loki via Grafana (`GRAFANA_*`)
+sans activer Gemini. Les providers Kubernetes réels ne sont pas implémentés.
+
+L'interface n'a pas encore de contrôle d'accès : utiliser uniquement en local ou dans un réseau de
+test protégé. Ne pas l'exposer publiquement avant l'ajout et la validation de l'authentification.
 
 ## Tests et lint
 
@@ -64,8 +89,8 @@ POST /webhooks/alertmanager
 GET /api/v1/incidents/{incident_id}
 ```
 
-L'API reste utile comme base fonctionnelle pour la prochaine étape, mais le workflow actuel reçoit
-des alertes par webhook ; il ne fournit pas encore un endpoint de diagnostic conversationnel.
+Le webhook Alertmanager hérité continue de déclencher son diagnostic sans approbation. Le nouveau
+parcours manuel est distinct et requiert une demande explicite via l'API ou le chat.
 
 ## Isolation
 
@@ -78,9 +103,9 @@ des alertes par webhook ; il ne fournit pas encore un endpoint de diagnostic con
 
 ## Prochaines étapes
 
-1. Valider cette copie et son lockfile.
-2. Ajouter l'interface Chainlit et définir son contrat avec le backend FastAPI.
-3. Ajouter les investigations à la demande et les alertes en attente soumises à confirmation humaine.
+1. Valider l'expérience complète dans un navigateur avec les APIs Grafana réelles.
+2. Ajouter le webhook de la copie et le parcours d'alertes en attente soumis à confirmation humaine.
+3. Décider et intégrer l'authentification avant toute exposition de l'interface.
 4. Créer une image, des manifests et un namespace distincts avant tout déploiement.
 
 Voir le cadrage complet dans [`ia4ops-chatbot-plan.md`](../../ia4ops-chatbot-plan.md).

@@ -22,6 +22,7 @@ def make_collect_cluster_node(provider: ClusterProvider):
         normalized = state["normalized_alert"]
         service = normalized.get("service", "unknown")
         namespace = normalized.get("namespace", "otel-demo")
+        window_minutes = state.get("window_minutes", 15)
 
         audit_events = list(state.get("audit_events", []))
         warnings = list(state.get("warnings", []))
@@ -30,7 +31,9 @@ def make_collect_cluster_node(provider: ClusterProvider):
 
         try:
             workload = await provider.get_workload_status(service, namespace)
-            events = await provider.get_cluster_events(namespace, service)
+            events = await provider.get_cluster_events(
+                namespace, service, window_minutes=window_minutes
+            )
             status = workload.get("status", "success")
             if status == "partial":
                 missing.append("État Kubernetes partiel — données de réplicas non disponibles")
@@ -52,7 +55,11 @@ def make_collect_cluster_node(provider: ClusterProvider):
             incident_id=incident_id,
             step="collect_cluster",
             status=status,
-            input_summary={"service": service, "namespace": namespace},
+            input_summary={
+                "service": service,
+                "namespace": namespace,
+                "window_minutes": window_minutes,
+            },
             output_summary={
                 "status": status,
                 "events_count": len(cluster_data.get("events", [])),

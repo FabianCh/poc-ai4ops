@@ -22,6 +22,7 @@ def make_collect_logs_node(provider: LogsProvider):
         normalized = state["normalized_alert"]
         service = normalized.get("service", "unknown")
         namespace = normalized.get("namespace", "otel-demo")
+        window_minutes = state.get("window_minutes", 15)
 
         audit_events = list(state.get("audit_events", []))
         warnings = list(state.get("warnings", []))
@@ -31,7 +32,12 @@ def make_collect_logs_node(provider: LogsProvider):
         try:
             # Traces en erreur (collect_traces) : corrélation logs ↔ traces, si disponible.
             trace_ids = state.get("traces_data", {}).get("sample_trace_ids") or None
-            logs = await provider.get_recent_errors(service, namespace, trace_ids=trace_ids)
+            logs = await provider.get_recent_errors(
+                service,
+                namespace,
+                window_minutes=window_minutes,
+                trace_ids=trace_ids,
+            )
             status = "success"
             logs_data = logs
             if not logs:
@@ -55,7 +61,11 @@ def make_collect_logs_node(provider: LogsProvider):
             incident_id=incident_id,
             step="collect_logs",
             status=status,
-            input_summary={"service": service, "namespace": namespace},
+            input_summary={
+                "service": service,
+                "namespace": namespace,
+                "window_minutes": window_minutes,
+            },
             output_summary={"status": status, "log_count": len(logs_data)},
             duration_ms=duration_ms,
             error=str(warnings[-1]) if status == "unavailable" and warnings else None,
@@ -68,7 +78,7 @@ def make_collect_logs_node(provider: LogsProvider):
             status=status,
             service=service,
             namespace=namespace,
-            window_minutes=15,
+            window_minutes=window_minutes,
             log_count=len(logs_data),
             log_samples=sanitized_log_samples(logs_data),
         )

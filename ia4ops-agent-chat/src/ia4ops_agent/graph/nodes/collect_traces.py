@@ -23,6 +23,7 @@ def make_collect_traces_node(provider: TracesProvider):
         normalized = state["normalized_alert"]
         service = normalized.get("service", "unknown")
         namespace = normalized.get("namespace", "otel-demo")
+        window_minutes = state.get("window_minutes", 15)
 
         audit_events = list(state.get("audit_events", []))
         warnings = list(state.get("warnings", []))
@@ -30,7 +31,9 @@ def make_collect_traces_node(provider: TracesProvider):
         missing = list(state.get("missing_information", []))
 
         try:
-            traces_data = await provider.get_error_traces(service, namespace)
+            traces_data = await provider.get_error_traces(
+                service, namespace, window_minutes=window_minutes
+            )
             status = traces_data.get("status", "success")
             if status not in ("success", "partial"):
                 status = "invalid"
@@ -50,7 +53,11 @@ def make_collect_traces_node(provider: TracesProvider):
             incident_id=incident_id,
             step="collect_traces",
             status=status,
-            input_summary={"service": service, "namespace": namespace},
+            input_summary={
+                "service": service,
+                "namespace": namespace,
+                "window_minutes": window_minutes,
+            },
             output_summary={
                 "status": status,
                 "error_trace_count": traces_data.get("error_trace_count", 0),
@@ -66,7 +73,7 @@ def make_collect_traces_node(provider: TracesProvider):
             status=status,
             service=service,
             namespace=namespace,
-            window_minutes=traces_data.get("window_minutes", 15),
+            window_minutes=traces_data.get("window_minutes", window_minutes),
             observations=traces_data,
         )
 

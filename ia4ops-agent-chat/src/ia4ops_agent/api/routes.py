@@ -8,6 +8,10 @@ Architecture asynchrone :
     → retourne 200 immédiatement (Alertmanager ne réessaie pas)
     → lance le graphe LangGraph en BackgroundTask
 
+  POST /api/v1/investigations
+    → valide une demande opérateur bornée
+    → lance le même graphe avec la période et la question demandées
+
   GET /api/v1/incidents/{incident_id}
     → consulte le store en mémoire
     → retourne le rapport quand disponible, "pending" sinon
@@ -21,6 +25,7 @@ Le graphe compilé et le store incidents sont injectés via le state applicatif
 
 import logging
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
@@ -30,6 +35,8 @@ from ia4ops_agent.api.models import (
     AlertResolved,
     AlertWebhookRequest,
     IncidentResponse,
+    InvestigationAccepted,
+    InvestigationRequest,
 )
 from ia4ops_agent.audit.trace_logging import emit_trace_event
 from ia4ops_agent.integrations.keep import KeepAPIError
@@ -204,6 +211,84 @@ async def receive_alertmanager_webhook(
     return AlertAccepted(incident_id=incident_id)
 
 
+@router.post(
+    "/api/v1/investigations",
+    response_model=InvestigationAccepted,
+    status_code=202,
+    summary="Démarrer une investigation demandée par un opérateur",
+    tags=["incidents"],
+)
+async def start_investigation(
+    payload: InvestigationRequest,
+    background_tasks: BackgroundTasks,
+    request: Request,
+) -> InvestigationAccepted:
+    """Construit une alerte interne validée puis réutilise le graphe existant."""
+    app_state = request.app.state
+    incident_id = (
+        f"inc-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{uuid4().hex[:6]}"
+    )
+    now = datetime.now(UTC)
+    labels = {
+        "alertname": "ManualInvestigation",
+        "namespace": "otel-demo",
+        "severity": "info",
+        "service_name": payload.service,
+    }
+    webhook = AlertWebhookRequest(
+        version="4",
+        groupKey=f"manual:{incident_id}",
+        status="firing",
+        receiver="ia4ops-agent-chat",
+        groupLabels={"namespace": "otel-demo", "alertname": "ManualInvestigation"},
+        commonLabels=labels,
+        commonAnnotations={},
+        alerts=[
+            {
+                "status": "firing",
+                "labels": labels,
+                "annotations": {
+                    "summary": f"Investigation manuelle de {payload.service}",
+                    "description": "Investigation déclenchée depuis le chatbot.",
+                },
+                "startsAt": now.isoformat(),
+                "endsAt": "0001-01-01T00:00:00Z",
+                "fingerprint": uuid4().hex,
+            }
+        ],
+    )
+    payload_dict = webhook.model_dump(mode="json")
+    received_at = now.isoformat()
+    app_state.incident_store[incident_id] = {
+        "incident_id": incident_id,
+        "status": "pending",
+        "alert_status": "firing",
+        "dedup_key": None,
+        "resolved_at": None,
+        "received_at": received_at,
+        "report": None,
+        "failure": None,
+    }
+
+    emit_trace_event(
+        "manual_investigation_requested",
+        incident_id,
+        service=payload.service,
+        namespace="otel-demo",
+        window_minutes=payload.window_minutes,
+    )
+    background_tasks.add_task(
+        _run_graph,
+        app_state=app_state,
+        incident_id=incident_id,
+        payload_dict=payload_dict,
+        window_minutes=payload.window_minutes,
+        investigation_question=payload.question,
+        publish_keep=False,
+    )
+    return InvestigationAccepted(incident_id=incident_id)
+
+
 # ---------------------------------------------------------------------------
 # GET /api/v1/incidents/{incident_id} — consultation du résultat
 # ---------------------------------------------------------------------------
@@ -258,6 +343,9 @@ async def _run_graph(
     app_state,
     incident_id: str,
     payload_dict: dict,
+    window_minutes: int = 15,
+    investigation_question: str | None = None,
+    publish_keep: bool = True,
 ) -> None:
     """
     Exécute le graphe LangGraph en arrière-plan.
@@ -276,7 +364,10 @@ async def _run_graph(
         initial_state = {
             "raw_alert": payload_dict,
             "incident_id": incident_id,  # hint pour le nœud initialize
+            "window_minutes": window_minutes,
         }
+        if investigation_question is not None:
+            initial_state["investigation_question"] = investigation_question
 
         logger.debug("Démarrage du graphe pour incident_id=%s", incident_id)
         final_state = await graph.ainvoke(initial_state)
@@ -323,7 +414,8 @@ async def _run_graph(
         )
         keep_publisher = getattr(app_state, "keep_publisher", None)
         if (
-            keep_publisher is not None
+            publish_keep
+            and keep_publisher is not None
             and status in {"completed", "completed_with_errors"}
             and isinstance(report.get("diagnosis"), dict)
         ):

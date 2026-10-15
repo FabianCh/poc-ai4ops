@@ -60,7 +60,7 @@ def _build_metrics_observation(data: dict[str, Any]) -> MetricsObservation | Non
 
 
 def _build_logs_observation(
-    logs: list[dict[str, Any]], service: str | None = None
+    logs: list[dict[str, Any]], service: str | None = None, window_minutes: int = 15
 ) -> LogsObservation | None:
     if not logs:
         return None
@@ -92,7 +92,7 @@ def _build_logs_observation(
             for (msg, level, origin), count in top
         ],
         sample_event_ids=[log.get("event_id", "") for log in logs[:3]],
-        window_minutes=15,
+        window_minutes=window_minutes,
     )
 
 
@@ -139,6 +139,7 @@ async def build_context_node(state: IncidentState) -> dict[str, Any]:
     start = time.monotonic()
     incident_id = state["incident_id"]
     normalized = state["normalized_alert"]
+    window_minutes = state.get("window_minutes", 15)
     audit_events = list(state.get("audit_events", []))
 
     metrics_status: SourceStatus = state.get("metrics_status", "not_started")
@@ -147,7 +148,9 @@ async def build_context_node(state: IncidentState) -> dict[str, Any]:
     cluster_status: SourceStatus = state.get("cluster_status", "not_started")
 
     metrics_obs = _build_metrics_observation(state.get("metrics_data", {}))
-    logs_obs = _build_logs_observation(state.get("logs_data", []), normalized.get("service"))
+    logs_obs = _build_logs_observation(
+        state.get("logs_data", []), normalized.get("service"), window_minutes
+    )
     traces_obs = _build_traces_observation(state.get("traces_data", {}))
     cluster_obs = _build_k8s_observation(state.get("cluster_data", {}))
 
@@ -177,6 +180,7 @@ async def build_context_node(state: IncidentState) -> dict[str, Any]:
             cluster=cluster_status,
         ),
         known_missing=list(state.get("missing_information", [])),
+        operator_question=state.get("investigation_question"),
     )
 
     duration_ms = int((time.monotonic() - start) * 1000)
@@ -190,6 +194,7 @@ async def build_context_node(state: IncidentState) -> dict[str, Any]:
             "logs_status": logs_status,
             "traces_status": traces_status,
             "cluster_status": cluster_status,
+            "window_minutes": window_minutes,
         },
         output_summary={
             "has_metrics": metrics_obs is not None,
@@ -202,6 +207,8 @@ async def build_context_node(state: IncidentState) -> dict[str, Any]:
     )
     audit_events.append(event.model_dump())
     context_for_llm = ctx.to_llm_dict()
+    trace_context = dict(context_for_llm)
+    trace_context.pop("operator_question", None)
     emit_trace_event(
         "diagnostic_context_built",
         incident_id,
@@ -211,7 +218,7 @@ async def build_context_node(state: IncidentState) -> dict[str, Any]:
             "traces": traces_status,
             "cluster": cluster_status,
         },
-        context=context_for_llm,
+        context=trace_context,
     )
 
     return {

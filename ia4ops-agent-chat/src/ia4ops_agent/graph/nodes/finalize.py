@@ -35,6 +35,8 @@ def make_finalize_node(audit_writer: AuditWriter):
             "finalized_at": datetime.now(UTC).isoformat(),
             "status": "completed" if not errors else "completed_with_errors",
             "diagnosis": diagnosis,
+            "context": state.get("incident_context", {}),
+            "window_minutes": state.get("window_minutes", 15),
             "source_status": {
                 "metrics": state.get("metrics_status", "not_started"),
                 "logs": state.get("logs_status", "not_started"),

@@ -12,12 +12,19 @@ On ne re-définit pas les modèles d'entrée — on réexporte pour la lisibilit
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 # Réexport du modèle de domaine — le webhook est déjà complet dans alerts.py
 from ia4ops_agent.domain.alerts import AlertmanagerWebhook as AlertWebhookRequest
 
-__all__ = ["AlertWebhookRequest", "AlertAccepted", "AlertDuplicate", "IncidentResponse"]
+__all__ = [
+    "AlertWebhookRequest",
+    "AlertAccepted",
+    "AlertDuplicate",
+    "IncidentResponse",
+    "InvestigationAccepted",
+    "InvestigationRequest",
+]
 
 
 class AlertAccepted(BaseModel):
@@ -29,6 +36,34 @@ class AlertAccepted(BaseModel):
     incident_id: str
     status: Literal["accepted"] = "accepted"
     message: str = "Webhook reçu. Diagnostic en cours en arrière-plan."
+
+
+class InvestigationRequest(BaseModel):
+    """Entrée bornée d'une investigation explicitement demandée par un opérateur."""
+
+    service: str = Field(
+        min_length=1,
+        max_length=63,
+        pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$",
+    )
+    window_minutes: int = Field(default=15, ge=1, le=60)
+    question: str = Field(min_length=1, max_length=500)
+
+    @field_validator("service", "question")
+    @classmethod
+    def strip_required_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Cette valeur ne peut pas être vide.")
+        return value
+
+
+class InvestigationAccepted(BaseModel):
+    """Réponse immédiate à une investigation mise en file de traitement."""
+
+    incident_id: str
+    status: Literal["accepted"] = "accepted"
+    message: str = "Investigation acceptée. Le diagnostic démarre en arrière-plan."
 
 
 class AlertDuplicate(BaseModel):
