@@ -2,10 +2,11 @@
 Tests d'intégration — API FastAPI (Task 5).
 
 Couverture :
-- POST /webhooks/alertmanager : payload v4 valide → 200 accepted immédiat
+- POST /webhooks/alertmanager : payload v4 valide → attente d'approbation ops
 - POST /webhooks/alertmanager : payload invalide → 422
 - POST /webhooks/alertmanager : même fingerprint+startsAt deux fois → duplicate_ignored
 - POST /webhooks/alertmanager : alerte Watchdog → accepted (ignoré silencieusement)
+- POST /api/v1/alerts/{id}/decision : approbation/ignorance et décisions uniques
 - GET  /api/v1/incidents/{id} : après traitement → rapport complet (status completed*)
 - GET  /api/v1/incidents/{id} : id inconnu → 404
 - GET  /health                : 200 ok
@@ -135,10 +136,18 @@ async def _wait_for_completion(
     """
     terminal_statuses = {"completed", "completed_with_errors", "failed"}
     start = asyncio.get_event_loop().time()
+    approved = False
     while asyncio.get_event_loop().time() - start < timeout:
         resp = await client.get(f"/api/v1/incidents/{incident_id}")
         assert resp.status_code == 200
         data = resp.json()
+        if data["status"] == "awaiting_approval" and not approved:
+            decision = await client.post(
+                f"/api/v1/alerts/{incident_id}/decision",
+                json={"action": "investigate"},
+            )
+            assert decision.status_code == 200
+            approved = True
         if data["status"] in terminal_statuses:
             return data
         await asyncio.sleep(0.05)
@@ -150,16 +159,37 @@ async def _wait_for_completion(
 # ---------------------------------------------------------------------------
 
 
-async def test_webhook_valid_payload_returns_accepted(client: AsyncClient) -> None:
-    """Un payload v4 valide doit retourner 200 avec status 'accepted'."""
+async def test_webhook_valid_payload_waits_for_operator_approval(client: AsyncClient) -> None:
+    """Une alerte valide est visible en attente et ne démarre pas le diagnostic."""
     payload = _alert_payload("product-catalog", "test-fp-001")
+    payload["alerts"].append(
+        {
+            **payload["alerts"][0],
+            "labels": {
+                **payload["alerts"][0]["labels"],
+                "service_name": "checkout",
+            },
+            "startsAt": "2026-10-05T12:30:00Z",
+            "fingerprint": "test-fp-002",
+        }
+    )
     resp = await client.post("/webhooks/alertmanager", json=payload)
 
     assert resp.status_code == 200
     data = resp.json()
-    assert data["status"] == "accepted"
+    assert data["status"] == "awaiting_approval"
     assert "incident_id" in data
     assert data["incident_id"]  # non vide
+
+    incident = await client.get(f"/api/v1/incidents/{data['incident_id']}")
+    assert incident.json()["status"] == "awaiting_approval"
+    assert incident.json()["report"] is None
+    pending = await client.get("/api/v1/alerts/pending")
+    assert len(pending.json()) == 1
+    assert pending.json()[0]["service"] == "product-catalog"
+    assert pending.json()[0]["alerts_count"] == 2
+    assert pending.json()[0]["affected_services"] == ["product-catalog", "checkout"]
+    assert "payload" not in pending.json()[0]
 
 
 async def test_webhook_invalid_payload_returns_422(client: AsyncClient) -> None:
@@ -194,7 +224,7 @@ async def test_webhook_duplicate_returns_duplicate_ignored(client: AsyncClient) 
 
     resp1 = await client.post("/webhooks/alertmanager", json=payload)
     assert resp1.status_code == 200
-    assert resp1.json()["status"] == "accepted"
+    assert resp1.json()["status"] == "awaiting_approval"
 
     resp2 = await client.post("/webhooks/alertmanager", json=payload)
     assert resp2.status_code == 200
@@ -209,8 +239,8 @@ async def test_webhook_different_startsAt_not_duplicate(client: AsyncClient) -> 
     resp1 = await client.post("/webhooks/alertmanager", json=payload1)
     resp2 = await client.post("/webhooks/alertmanager", json=payload2)
 
-    assert resp1.json()["status"] == "accepted"
-    assert resp2.json()["status"] == "accepted"
+    assert resp1.json()["status"] == "awaiting_approval"
+    assert resp2.json()["status"] == "awaiting_approval"
     # Les deux incidents doivent avoir des IDs distincts
     assert resp1.json()["incident_id"] != resp2.json()["incident_id"]
 
@@ -269,6 +299,89 @@ async def test_webhook_unmatched_resolved_is_acknowledged_without_diagnosis(
     assert not app.state.incident_store
 
 
+async def test_resolved_alert_waiting_for_approval_is_closed_without_graph(
+    client: AsyncClient,
+) -> None:
+    payload = _alert_payload("checkout", "test-fp-resolved-before-approval")
+    firing = await client.post("/webhooks/alertmanager", json=payload)
+    incident_id = firing.json()["incident_id"]
+
+    resolved = {
+        **payload,
+        "status": "resolved",
+        "alerts": [
+            {
+                **payload["alerts"][0],
+                "status": "resolved",
+                "endsAt": "2026-10-05T12:10:00Z",
+            }
+        ],
+    }
+    response = await client.post("/webhooks/alertmanager", json=resolved)
+    incident = await client.get(f"/api/v1/incidents/{incident_id}")
+    pending = await client.get("/api/v1/alerts/pending")
+    decision = await client.post(
+        f"/api/v1/alerts/{incident_id}/decision",
+        json={"action": "investigate"},
+    )
+
+    assert response.json()["status"] == "resolved"
+    assert incident.json()["status"] == "resolved"
+    assert incident.json()["report"] is None
+    assert pending.json() == []
+    assert decision.status_code == 409
+
+
+async def test_alert_can_be_ignored_without_running_graph(client: AsyncClient) -> None:
+    response = await client.post(
+        "/webhooks/alertmanager",
+        json=_alert_payload("checkout", "test-fp-ignore"),
+    )
+    incident_id = response.json()["incident_id"]
+    ignored = await client.post(
+        f"/api/v1/alerts/{incident_id}/decision",
+        json={"action": "ignore"},
+    )
+    duplicate_decision = await client.post(
+        f"/api/v1/alerts/{incident_id}/decision",
+        json={"action": "investigate"},
+    )
+    incident = await client.get(f"/api/v1/incidents/{incident_id}")
+    pending = await client.get("/api/v1/alerts/pending")
+
+    assert ignored.status_code == 200
+    assert ignored.json()["status"] == "ignored"
+    assert incident.json()["status"] == "ignored"
+    assert incident.json()["report"] is None
+    assert duplicate_decision.status_code == 409
+    assert pending.json() == []
+
+
+async def test_alert_investigation_runs_only_after_explicit_approval(
+    client: AsyncClient,
+) -> None:
+    payload = _alert_payload("product-catalog", "test-fp-approve", "2026-10-05T21:00:00Z")
+    response = await client.post("/webhooks/alertmanager", json=payload)
+    incident_id = response.json()["incident_id"]
+
+    waiting = await client.get(f"/api/v1/incidents/{incident_id}")
+    approval = await client.post(
+        f"/api/v1/alerts/{incident_id}/decision",
+        json={"action": "investigate", "window_minutes": 9},
+    )
+    report = await _wait_for_completion(client, incident_id)
+    second_approval = await client.post(
+        f"/api/v1/alerts/{incident_id}/decision",
+        json={"action": "investigate"},
+    )
+
+    assert waiting.json()["status"] == "awaiting_approval"
+    assert approval.status_code == 200
+    assert report["report"]["window_minutes"] == 9
+    assert report["report"]["action_executed"] is False
+    assert second_approval.status_code == 409
+
+
 async def test_webhook_watchdog_returns_accepted(client: AsyncClient) -> None:
     """L'alerte Watchdog est acceptée silencieusement (pas de diagnostic lancé)."""
     resp = await client.post("/webhooks/alertmanager", json=_watchdog_payload())
@@ -302,7 +415,13 @@ async def test_get_incident_registered_after_post(client: AsyncClient) -> None:
     get_resp = await client.get(f"/api/v1/incidents/{incident_id}")
     assert get_resp.status_code == 200
     data = get_resp.json()
-    assert data["status"] in {"pending", "running", "completed", "completed_with_errors"}
+    assert data["status"] in {
+        "awaiting_approval",
+        "pending",
+        "running",
+        "completed",
+        "completed_with_errors",
+    }
 
 
 async def test_get_incident_case_a_completes_with_diagnosis(client: AsyncClient) -> None:

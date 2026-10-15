@@ -3,9 +3,9 @@
 Cette application est une **copie indépendante** de `ia4ops-agent`, créée pour développer une
 interface chatbot Chainlit sans modifier l'agent stable.
 
-> **État** : copie indépendante créée depuis le commit stable `ebc2221`. L'interface Chainlit
-> et le parcours d'investigation manuelle sont en cours ; le webhook d'alertes en attente et le
-> déploiement isolé restent à faire. Ce projet ne remplace pas `ia4ops-agent`.
+> **État** : interface Chainlit, investigation manuelle et parcours d'approbation Alertmanager
+> implémentés ; validation navigateur, authentification et déploiement isolé restent à faire.
+> Ce projet ne remplace pas `ia4ops-agent`.
 
 Le diagnostic reste en lecture seule. Pendant le développement, le LLM doit rester en mock ;
 les providers de données Prometheus/Loki peuvent être configurés séparément en réel.
@@ -59,6 +59,32 @@ séparément les observations issues des providers. `DATA_PROVIDER=mock` (défau
 observations synthétiques. `DATA_PROVIDER=real` active Prometheus/Loki via Grafana (`GRAFANA_*`)
 sans activer Gemini. Les providers Kubernetes réels ne sont pas implémentés.
 
+### Alertes Alertmanager
+
+Le webhook de cette copie valide et déduplique les notifications. Une alerte `firing` est ajoutée
+à la file d'attente ; le webhook ne démarre pas le diagnostic. Les chats Chainlit actifs vérifient
+la file périodiquement et affichent des boutons **Investiguer** et **Ignorer**. Une nouvelle session
+affiche aussi les alertes encore en attente. L'approbation démarre le même graphe en lecture seule ;
+une alerte ignorée ne lance aucune collecte. Une alerte `resolved` reçue avant décision est clôturée
+sans diagnostic.
+
+Les routes de décision ne peuvent être utilisées qu'une fois : si un autre opérateur a déjà décidé,
+l'API répond `409 Conflict`. Les alertes et la déduplication sont actuellement en mémoire et sont
+perdues au redémarrage du processus ; cette version ne doit donc pas encore servir de file d'alertes
+durable.
+
+```text
+POST /webhooks/alertmanager
+        ↓
+Validation + déduplication → alerte en attente
+        ↓
+GET /api/v1/alerts/pending → notification Chainlit
+        ↓
+POST /api/v1/alerts/{incident_id}/decision
+        ├── investigate → graphe LangGraph → rapport
+        └── ignore      → clôture sans diagnostic
+```
+
 L'interface n'a pas encore de contrôle d'accès : utiliser uniquement en local ou dans un réseau de
 test protégé. Ne pas l'exposer publiquement avant l'ajout et la validation de l'authentification.
 
@@ -71,7 +97,7 @@ uv run ruff check .
 
 Les tests live sont exclus par défaut ; ils ne doivent pas être lancés automatiquement.
 
-## Architecture héritée
+## Parcours de l'agent stable
 
 ```text
 POST /webhooks/alertmanager
@@ -89,8 +115,8 @@ POST /webhooks/alertmanager
 GET /api/v1/incidents/{incident_id}
 ```
 
-Le webhook Alertmanager hérité continue de déclencher son diagnostic sans approbation. Le nouveau
-parcours manuel est distinct et requiert une demande explicite via l'API ou le chat.
+L'agent stable continue de déclencher son diagnostic Alertmanager sans approbation. Le webhook et
+les décisions de cette copie sont distincts et ne modifient pas le comportement de l'agent stable.
 
 ## Isolation
 
@@ -103,9 +129,9 @@ parcours manuel est distinct et requiert une demande explicite via l'API ou le c
 
 ## Prochaines étapes
 
-1. Valider l'expérience complète dans un navigateur avec les APIs Grafana réelles.
-2. Ajouter le webhook de la copie et le parcours d'alertes en attente soumis à confirmation humaine.
-3. Décider et intégrer l'authentification avant toute exposition de l'interface.
+1. Valider le chat, le polling et les actions d'approbation dans un navigateur, d'abord avec mocks.
+2. Décider et intégrer l'authentification avant toute exposition de l'interface.
+3. Ajouter la persistance durable de la file et valider le comportement multi-opérateurs.
 4. Créer une image, des manifests et un namespace distincts avant tout déploiement.
 
 Voir le cadrage complet dans [`ia4ops-chatbot-plan.md`](../../ia4ops-chatbot-plan.md).

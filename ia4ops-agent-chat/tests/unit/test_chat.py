@@ -2,7 +2,11 @@
 
 import pytest
 
-from ia4ops_agent.chat_app import format_report, parse_investigation_message
+from ia4ops_agent.chat_app import (
+    format_pending_alert,
+    format_report,
+    parse_investigation_message,
+)
 
 
 def test_parse_investigation_command_with_question_and_window() -> None:
@@ -67,3 +71,24 @@ def test_mock_report_rendering_distinguishes_real_observations_from_mock_diagnos
     assert "diagnostic ci-dessous est préconfiguré" in content
     assert "Diagnostic d'essai" in content
     assert "Aucune action n'a été exécutée" in content
+
+
+def test_pending_alert_rendering_requests_operator_approval() -> None:
+    content = format_pending_alert(
+        {
+            "alert_name": "OtelDemoServiceHighErrorRate",
+            "service": "checkout",
+            "affected_services": ["checkout", "payment"],
+            "namespace": "otel-demo",
+            "severity": "critical",
+            "starts_at": "2026-10-15T12:00:00Z",
+            "alerts_count": 2,
+            "summary": "High error rate",
+            "description": "Errors are above threshold.",
+        }
+    )
+
+    assert "checkout, payment" in content
+    assert "2" in content
+    assert "Souhaitez-vous que je lance une investigation" in content
+    assert "Aucune collecte ni diagnostic n'a été démarré" in content

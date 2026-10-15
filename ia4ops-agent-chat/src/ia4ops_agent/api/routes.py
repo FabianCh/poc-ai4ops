@@ -6,11 +6,17 @@ Architecture asynchrone :
     → valide le payload v4
     → déduplique par make_dedup_key()
     → retourne 200 immédiatement (Alertmanager ne réessaie pas)
-    → lance le graphe LangGraph en BackgroundTask
+    → enregistre l'alerte en attente d'approbation
 
   POST /api/v1/investigations
     → valide une demande opérateur bornée
     → lance le même graphe avec la période et la question demandées
+
+  GET /api/v1/alerts/pending
+    → retourne les alertes qui attendent une décision humaine
+
+  POST /api/v1/alerts/{incident_id}/decision
+    → démarre le graphe après approbation ou clôture l'alerte comme ignorée
 
   GET /api/v1/incidents/{incident_id}
     → consulte le store en mémoire
@@ -31,12 +37,16 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
 from ia4ops_agent.api.models import (
     AlertAccepted,
+    AlertDecisionRequest,
+    AlertDecisionResponse,
     AlertDuplicate,
+    AlertPending,
     AlertResolved,
     AlertWebhookRequest,
     IncidentResponse,
     InvestigationAccepted,
     InvestigationRequest,
+    PendingAlert,
 )
 from ia4ops_agent.audit.trace_logging import emit_trace_event
 from ia4ops_agent.integrations.keep import KeepAPIError
@@ -54,11 +64,11 @@ router = APIRouter()
 
 @router.post(
     "/webhooks/alertmanager",
-    response_model=AlertAccepted | AlertDuplicate | AlertResolved,
+    response_model=AlertAccepted | AlertPending | AlertDuplicate | AlertResolved,
     summary="Réception d'une notification Alertmanager v4",
     description=(
-        "Accepte un payload Alertmanager v4, déduplique par fingerprint+startsAt, "
-        "lance le diagnostic en arrière-plan et retourne 200 immédiatement."
+        "Accepte un payload Alertmanager v4, le déduplique et attend une décision ops avant "
+        "de lancer le diagnostic. Retourne 200 immédiatement."
     ),
     tags=["webhook"],
 )
@@ -66,12 +76,12 @@ async def receive_alertmanager_webhook(
     payload: AlertWebhookRequest,
     background_tasks: BackgroundTasks,
     request: Request,
-) -> AlertAccepted | AlertDuplicate | AlertResolved:
+) -> AlertAccepted | AlertPending | AlertDuplicate | AlertResolved:
     """
     Point d'entrée principal des alertes Alertmanager.
 
-    Alertmanager exige un 2xx rapide. Le traitement (graphe LangGraph)
-    s'exécute en BackgroundTask pour ne jamais bloquer la réponse.
+    Alertmanager exige un 2xx rapide. Le webhook ne lance jamais le graphe :
+    une action explicite d'un opérateur est requise.
     """
     app_state = request.app.state
 
@@ -118,6 +128,9 @@ async def receive_alertmanager_webhook(
         )
         entry["alert_status"] = "resolved"
         entry["resolved_at"] = resolved_at.isoformat() if resolved_at else None
+        if entry.get("status") == "awaiting_approval":
+            entry["status"] = "resolved"
+            entry["approval_status"] = "resolved"
         emit_trace_event(
             "webhook_resolved",
             incident_id,
@@ -157,9 +170,8 @@ async def receive_alertmanager_webhook(
         )
         return AlertDuplicate(incident_id=incident_id)
 
-    # --- Générer l'incident_id et réserver l'entrée avant le démarrage du graphe ---
-    import uuid
-    incident_id = f"inc-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
+    # --- Réserver l'entrée en attente sans lancer le graphe ---
+    incident_id = f"inc-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{uuid4().hex[:6]}"
 
     received_at = datetime.now(UTC).isoformat()
     app_state.dedup_cache[dedup_key] = incident_id
@@ -185,13 +197,15 @@ async def receive_alertmanager_webhook(
     # Initialiser l'entrée "pending" dans le store
     app_state.incident_store[incident_id] = {
         "incident_id": incident_id,
-        "status": "pending",
+        "status": "awaiting_approval",
+        "approval_status": "awaiting_approval",
         "alert_status": payload.status,
         "dedup_key": dedup_key,
         "resolved_at": None,
         "received_at": received_at,
         "report": None,
         "failure": None,
+        "payload": payload.model_dump(mode="json"),
     }
 
     logger.info(
@@ -200,15 +214,98 @@ async def receive_alertmanager_webhook(
         payload.affected_services(),
     )
 
-    # --- Lancer le graphe en arrière-plan ---
+    return AlertPending(incident_id=incident_id)
+
+
+@router.get(
+    "/api/v1/alerts/pending",
+    response_model=list[PendingAlert],
+    summary="Lister les alertes en attente de décision ops",
+    tags=["alerts"],
+)
+async def get_pending_alerts(request: Request) -> list[PendingAlert]:
+    """Retourne des résumés bornés des alertes firing non encore décidées."""
+    pending: list[PendingAlert] = []
+    for entry in request.app.state.incident_store.values():
+        if entry.get("status") != "awaiting_approval":
+            continue
+        webhook = AlertWebhookRequest.model_validate(entry["payload"])
+        primary = webhook.primary_alert()
+        service = webhook.affected_services()[0] if webhook.affected_services() else "unknown"
+        pending.append(
+            PendingAlert(
+                incident_id=entry["incident_id"],
+                alert_name=primary.labels.alertname,
+                service=service,
+                affected_services=webhook.affected_services(),
+                namespace=primary.labels.namespace or "unknown",
+                severity=primary.labels.severity or "unknown",
+                summary=primary.annotations.summary,
+                description=primary.annotations.description,
+                starts_at=primary.startsAt,
+                received_at=entry["received_at"],
+                alerts_count=len(webhook.alerts),
+            )
+        )
+    return sorted(pending, key=lambda item: item.starts_at)
+
+
+@router.post(
+    "/api/v1/alerts/{incident_id}/decision",
+    response_model=AlertDecisionResponse,
+    summary="Décider du traitement d'une alerte",
+    tags=["alerts"],
+)
+async def decide_alert(
+    incident_id: str,
+    payload: AlertDecisionRequest,
+    background_tasks: BackgroundTasks,
+    request: Request,
+) -> AlertDecisionResponse:
+    """N'exécute le graphe que pour une alerte explicitement approuvée."""
+    store = request.app.state.incident_store
+    entry = store.get(incident_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Alerte '{incident_id}' introuvable.")
+    if entry.get("status") != "awaiting_approval":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Alerte non disponible pour décision (état: {entry.get('status')}).",
+        )
+
+    entry["approval_status"] = payload.action
+    if payload.action == "ignore":
+        entry["status"] = "ignored"
+        emit_trace_event("alert_ignored", incident_id)
+        return AlertDecisionResponse(
+            incident_id=incident_id,
+            status="ignored",
+            message="Alerte ignorée ; aucun diagnostic n'a été lancé.",
+        )
+
+    entry["status"] = "pending"
+    webhook = AlertWebhookRequest.model_validate(entry["payload"])
+    primary = webhook.primary_alert()
+    emit_trace_event(
+        "alert_investigation_approved",
+        incident_id,
+        service=webhook.affected_services()[0] if webhook.affected_services() else "unknown",
+        alert_name=primary.labels.alertname,
+        window_minutes=payload.window_minutes,
+    )
     background_tasks.add_task(
         _run_graph,
-        app_state=app_state,
+        app_state=request.app.state,
         incident_id=incident_id,
-        payload_dict=payload.model_dump(mode="json"),
+        payload_dict=entry["payload"],
+        window_minutes=payload.window_minutes,
+        investigation_question=f"Analyser les signaux liés à l'alerte {primary.labels.alertname}.",
     )
-
-    return AlertAccepted(incident_id=incident_id)
+    return AlertDecisionResponse(
+        incident_id=incident_id,
+        status="pending",
+        message="Investigation approuvée ; le diagnostic démarre.",
+    )
 
 
 @router.post(

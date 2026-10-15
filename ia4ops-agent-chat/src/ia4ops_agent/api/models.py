@@ -21,6 +21,10 @@ __all__ = [
     "AlertWebhookRequest",
     "AlertAccepted",
     "AlertDuplicate",
+    "AlertPending",
+    "AlertDecisionRequest",
+    "AlertDecisionResponse",
+    "PendingAlert",
     "IncidentResponse",
     "InvestigationAccepted",
     "InvestigationRequest",
@@ -29,13 +33,52 @@ __all__ = [
 
 class AlertAccepted(BaseModel):
     """
-    Réponse immédiate pour un webhook accepté (HTTP 200).
-    Le traitement est asynchrone — le diagnostic n'est pas encore disponible.
+    Réponse immédiate réservée aux notifications ignorées sans diagnostic
+    (par exemple Alertmanager Watchdog).
     """
 
     incident_id: str
     status: Literal["accepted"] = "accepted"
-    message: str = "Webhook reçu. Diagnostic en cours en arrière-plan."
+    message: str = "Notification reçue."
+
+
+class AlertPending(BaseModel):
+    """Alerte reçue, en attente de décision explicite d'un opérateur."""
+
+    incident_id: str
+    status: Literal["awaiting_approval"] = "awaiting_approval"
+    message: str = "Alerte reçue. Le diagnostic attend l'approbation d'un opérateur."
+
+
+class PendingAlert(BaseModel):
+    """Résumé expurgé présenté aux opérateurs dans le chatbot."""
+
+    incident_id: str
+    alert_name: str
+    service: str
+    affected_services: list[str]
+    namespace: str
+    severity: str
+    summary: str | None = None
+    description: str | None = None
+    starts_at: datetime
+    received_at: str
+    alerts_count: int
+
+
+class AlertDecisionRequest(BaseModel):
+    """Décision explicite d'investiguer ou d'ignorer une alerte."""
+
+    action: Literal["investigate", "ignore"]
+    window_minutes: int = Field(default=15, ge=1, le=60)
+
+
+class AlertDecisionResponse(BaseModel):
+    """Confirmation de la décision et indication de l'état du traitement."""
+
+    incident_id: str
+    status: Literal["pending", "ignored"]
+    message: str
 
 
 class InvestigationRequest(BaseModel):
@@ -92,7 +135,16 @@ class IncidentStatus(BaseModel):
     """
 
     incident_id: str
-    status: Literal["pending", "running", "completed", "completed_with_errors", "failed"]
+    status: Literal[
+        "awaiting_approval",
+        "pending",
+        "running",
+        "completed",
+        "completed_with_errors",
+        "failed",
+        "ignored",
+        "resolved",
+    ]
     received_at: datetime | None = None
     finalized_at: datetime | None = None
 
@@ -101,13 +153,22 @@ class IncidentResponse(BaseModel):
     """
     Réponse complète pour GET /api/v1/incidents/{incident_id}.
 
-    - status "pending" / "running" : diagnosis est None, poll à nouveau plus tard
+    - status "awaiting_approval" / "pending" / "running" : aucun rapport final
     - status "completed*" : diagnosis contient le rapport complet
     - status "failed" : failure contient la raison
     """
 
     incident_id: str
-    status: Literal["pending", "running", "completed", "completed_with_errors", "failed"]
+    status: Literal[
+        "awaiting_approval",
+        "pending",
+        "running",
+        "completed",
+        "completed_with_errors",
+        "failed",
+        "ignored",
+        "resolved",
+    ]
     received_at: str | None = None
     alert_status: Literal["firing", "resolved"] | None = None
     resolved_at: str | None = None

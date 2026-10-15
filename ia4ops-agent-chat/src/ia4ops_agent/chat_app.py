@@ -16,6 +16,7 @@ _SERVICE_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$")
 _DEFAULT_QUESTION = "Analyser les signaux disponibles et proposer les prochaines vérifications."
 _POLL_INTERVAL_SECONDS = 1
 _POLL_TIMEOUT_SECONDS = 180
+_ALERT_POLL_INTERVAL_SECONDS = 3
 
 
 def parse_investigation_message(message: str) -> InvestigationRequest:
@@ -156,8 +157,106 @@ def format_report(report: dict[str, Any], llm_provider: str, data_provider: str)
     return "\n".join(lines)
 
 
+def format_pending_alert(alert: dict[str, Any]) -> str:
+    """Présente le résumé Alertmanager avant toute collecte ou analyse."""
+    services = ", ".join(alert.get("affected_services") or [alert.get("service", "unknown")])
+    lines = [
+        "## Nouvelle alerte Alertmanager — décision requise",
+        f"- **Alerte** : `{alert.get('alert_name', 'unknown')}`",
+        f"- **Service(s)** : {services}",
+        f"- **Namespace** : `{alert.get('namespace', 'unknown')}`",
+        f"- **Sévérité** : `{alert.get('severity', 'unknown')}`",
+        f"- **Début** : {alert.get('starts_at', 'inconnu')}",
+        f"- **Alertes groupées** : {alert.get('alerts_count', 1)}",
+    ]
+    if alert.get("summary"):
+        lines.append(f"- **Résumé** : {alert['summary']}")
+    if alert.get("description"):
+        lines.append(f"- **Détails** : {alert['description']}")
+    lines.extend(
+        [
+            "",
+            "Souhaitez-vous que je lance une investigation en lecture seule ?",
+            "Aucune collecte ni diagnostic n'a été démarré par la réception du webhook.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+async def _fetch_pending_alerts() -> list[dict[str, Any]]:
+    async with httpx.AsyncClient(
+        base_url=f"http://127.0.0.1:{settings.port}", timeout=5
+    ) as client:
+        response = await client.get("/api/v1/alerts/pending")
+        response.raise_for_status()
+        return response.json()
+
+
+async def _notify_pending_alerts() -> None:
+    notified_ids = cl.user_session.get("notified_alert_ids", set())
+    try:
+        alerts = await _fetch_pending_alerts()
+    except httpx.HTTPError as exc:
+        if not cl.user_session.get("alert_poll_error_reported", False):
+            await cl.Message(
+                content=f"Impossible de vérifier les alertes en attente : {exc}"
+            ).send()
+            cl.user_session.set("alert_poll_error_reported", True)
+        return
+
+    cl.user_session.set("alert_poll_error_reported", False)
+    for alert in alerts:
+        incident_id = alert["incident_id"]
+        if incident_id in notified_ids:
+            continue
+        actions = [
+            cl.Action(
+                name="investigate_alert",
+                payload={"incident_id": incident_id},
+                label="Investiguer",
+                icon="search",
+            ),
+            cl.Action(
+                name="ignore_alert",
+                payload={"incident_id": incident_id},
+                label="Ignorer",
+                icon="x",
+            ),
+        ]
+        await cl.Message(content=format_pending_alert(alert), actions=actions).send()
+        notified_ids.add(incident_id)
+    cl.user_session.set("notified_alert_ids", notified_ids)
+
+
+async def _poll_alerts_until_chat_ends() -> None:
+    while True:
+        await asyncio.sleep(_ALERT_POLL_INTERVAL_SECONDS)
+        await _notify_pending_alerts()
+
+
+async def _wait_for_alert_report(incident_id: str) -> dict[str, Any]:
+    deadline = time.monotonic() + _POLL_TIMEOUT_SECONDS
+    async with httpx.AsyncClient(
+        base_url=f"http://127.0.0.1:{settings.port}", timeout=15
+    ) as client:
+        while time.monotonic() < deadline:
+            response = await client.get(f"/api/v1/incidents/{incident_id}")
+            if response.status_code != 200:
+                raise RuntimeError(_response_detail(response))
+            incident = response.json()
+            if incident["status"] in {"completed", "completed_with_errors"}:
+                return incident
+            if incident["status"] in {"failed", "ignored", "resolved"}:
+                raise RuntimeError(
+                    f"Investigation terminée avec l'état `{incident['status']}`."
+                )
+            await asyncio.sleep(_POLL_INTERVAL_SECONDS)
+    raise TimeoutError(f"L'investigation `{incident_id}` n'est pas terminée après 180 secondes.")
+
+
 @cl.on_chat_start
 async def on_chat_start() -> None:
+    cl.user_session.set("notified_alert_ids", set())
     llm_mode = (
         "**LLM mock** : le diagnostic est préconfiguré et démonstratif."
         if settings.llm_provider == "mock"
@@ -179,6 +278,16 @@ async def on_chat_start() -> None:
             "Les remédiations sont uniquement suggérées, jamais exécutées."
         )
     ).send()
+    await _notify_pending_alerts()
+    task = asyncio.create_task(_poll_alerts_until_chat_ends())
+    cl.user_session.set("alert_poll_task", task)
+
+
+@cl.on_chat_end
+async def on_chat_end() -> None:
+    task = cl.user_session.get("alert_poll_task")
+    if task is not None:
+        task.cancel()
 
 
 @cl.on_message
@@ -243,6 +352,82 @@ async def on_message(message: cl.Message) -> None:
     except httpx.RequestError as exc:
         progress.content = f"API IA4Ops injoignable sur `{base_url}` : {exc}"
         await progress.update()
+
+
+@cl.action_callback("investigate_alert")
+async def investigate_alert(action: cl.Action) -> None:
+    incident_id = action.payload.get("incident_id")
+    if not isinstance(incident_id, str):
+        await cl.Message(content="Action invalide : identifiant d'alerte manquant.").send()
+        return
+
+    try:
+        async with httpx.AsyncClient(
+            base_url=f"http://127.0.0.1:{settings.port}", timeout=15
+        ) as client:
+            response = await client.post(
+                f"/api/v1/alerts/{incident_id}/decision",
+                json={"action": "investigate"},
+            )
+            if response.status_code != 200:
+                await cl.Message(
+                    content=(
+                        f"Décision refusée pour `{incident_id}` : "
+                        f"{_response_detail(response)}"
+                    )
+                ).send()
+                if response.status_code == 409:
+                    await action.remove()
+                return
+            await action.remove()
+            await cl.Message(
+                content=f"Investigation approuvée pour `{incident_id}`."
+            ).send()
+            result = await _wait_for_alert_report(incident_id)
+            await cl.Message(
+                content=format_report(
+                    result.get("report") or {},
+                    settings.llm_provider,
+                    settings.data_provider,
+                )
+            ).send()
+    except httpx.RequestError as exc:
+        await cl.Message(content=f"API IA4Ops injoignable : {exc}").send()
+    except (RuntimeError, TimeoutError) as exc:
+        await cl.Message(content=str(exc)).send()
+
+
+@cl.action_callback("ignore_alert")
+async def ignore_alert(action: cl.Action) -> None:
+    incident_id = action.payload.get("incident_id")
+    if not isinstance(incident_id, str):
+        await cl.Message(content="Action invalide : identifiant d'alerte manquant.").send()
+        return
+
+    try:
+        async with httpx.AsyncClient(
+            base_url=f"http://127.0.0.1:{settings.port}", timeout=15
+        ) as client:
+            response = await client.post(
+                f"/api/v1/alerts/{incident_id}/decision",
+                json={"action": "ignore"},
+            )
+            if response.status_code != 200:
+                await cl.Message(
+                    content=(
+                        f"Décision refusée pour `{incident_id}` : "
+                        f"{_response_detail(response)}"
+                    )
+                ).send()
+                if response.status_code == 409:
+                    await action.remove()
+                return
+            await action.remove()
+            await cl.Message(
+                content=f"Alerte `{incident_id}` ignorée. Aucun diagnostic n'a été lancé."
+            ).send()
+    except httpx.RequestError as exc:
+        await cl.Message(content=f"API IA4Ops injoignable : {exc}").send()
 
 
 def _response_detail(response: httpx.Response) -> str:
