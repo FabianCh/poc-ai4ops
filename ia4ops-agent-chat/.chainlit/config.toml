@@ -113,10 +113,13 @@ reaction_on_message_received = false
         allowed_urls = []
 
 [UI]
-# Name of the assistant.
-name = "IA4Ops"
+name = "IA4Ops — Ops Assistant"
 
-# default_theme = "dark"
+default_theme = "light"
+layout = "wide"
+default_sidebar_state = "closed"
+description = "Assistant de diagnostic SRE en lecture seule pour les opérateurs IA4Ops."
+custom_css = "/public/custom.css"
 
 # Force a specific language for all users (e.g., "en-US", "he-IL", "fr-FR")
 # If not set, the browser's language will be used

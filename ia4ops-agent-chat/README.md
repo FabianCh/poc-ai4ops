@@ -37,6 +37,18 @@ uv run uvicorn ia4ops_agent.main:app --reload --port 8000
 L'API est disponible sur `http://localhost:8000`, sa documentation sur `/docs` et le chatbot sur
 [`/chat/`](http://localhost:8000/chat/).
 
+### Identité visuelle
+
+L'interface reprend la palette du guide IA4Ops/Wavestone, avec un thème clair par défaut, un thème
+sombre compatible, une typographie Aptos avec repli système et des styles clavier visibles. Le thème
+et les ajustements CSS sont propres à cette copie (`public/theme.json` et `public/custom.css`).
+Aucun logo Wavestone n'est inclus : seules des ressources officielles fournies pourront être
+ajoutées.
+En thème sombre, le vert de la palette met en évidence les titres et le bouton d'envoi, tandis que
+la zone de saisie dispose d'une surface et d'une bordure distinctes. Les alertes en attente ont un
+en-tête d'avertissement et un panneau visuel dédié rappelant qu'aucune investigation ne démarre sans
+décision de l'opérateur.
+
 ### Demander une investigation
 
 Dans le chat, saisir une commande structurée :

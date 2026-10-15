@@ -88,7 +88,9 @@ def test_pending_alert_rendering_requests_operator_approval() -> None:
         }
     )
 
+    assert "⚠️ Alerte à traiter" in content
+    assert "NOUVELLE ALERTE — EN ATTENTE DE VOTRE DÉCISION" in content
     assert "checkout, payment" in content
     assert "2" in content
-    assert "Souhaitez-vous que je lance une investigation" in content
-    assert "Aucune collecte ni diagnostic n'a été démarré" in content
+    assert "Aucune collecte ni aucun diagnostic ne démarre sans votre choix" in content
+    assert "lancer une investigation en lecture seule ou ignorer" in content

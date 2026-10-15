@@ -1,0 +1,216 @@
+:root {
+  font-family: Aptos, "Segoe UI", Arial, sans-serif;
+  --ia4ops-purple: #451dc7;
+  --ia4ops-navy: #250f6b;
+  --ia4ops-surface: #f6f6f6;
+  --ia4ops-border: #cccccc;
+  --ia4ops-warning: #ffca4a;
+  --ia4ops-error: #ff2a49;
+}
+
+html:not(.dark) {
+  --background: 0 0% 100% !important;
+  --foreground: 0 0% 7% !important;
+  --card: 0 0% 100% !important;
+  --card-foreground: 0 0% 7% !important;
+  --popover: 0 0% 100% !important;
+  --popover-foreground: 0 0% 7% !important;
+  --primary: 255 75% 45% !important;
+  --primary-foreground: 0 0% 100% !important;
+  --secondary: 0 0% 96% !important;
+  --secondary-foreground: 255 75% 45% !important;
+  --muted: 0 0% 96% !important;
+  --muted-foreground: 0 0% 27% !important;
+  --accent: 0 0% 96% !important;
+  --accent-foreground: 255 75% 45% !important;
+  --destructive: 351 100% 58% !important;
+  --destructive-foreground: 0 0% 100% !important;
+  --border: 0 0% 80% !important;
+  --input: 0 0% 80% !important;
+  --ring: 255 75% 45% !important;
+  --radius: 0.65rem !important;
+}
+
+html.dark {
+  --background: 254 75% 24% !important;
+  --foreground: 0 0% 100% !important;
+  --card: 255 75% 45% !important;
+  --card-foreground: 0 0% 100% !important;
+  --popover: 254 75% 24% !important;
+  --popover-foreground: 0 0% 100% !important;
+  --primary: 147 97% 48% !important;
+  --primary-foreground: 254 75% 24% !important;
+  --secondary: 254 75% 24% !important;
+  --secondary-foreground: 0 0% 100% !important;
+  --muted: 254 75% 24% !important;
+  --muted-foreground: 0 0% 92% !important;
+  --accent: 254 75% 24% !important;
+  --accent-foreground: 0 0% 100% !important;
+  --destructive: 351 100% 58% !important;
+  --destructive-foreground: 0 0% 100% !important;
+  --border: 255 75% 45% !important;
+  --input: 147 97% 48% !important;
+  --ring: 147 97% 48% !important;
+  --radius: 0.65rem !important;
+}
+
+html.dark button:focus-visible,
+html.dark a:focus-visible,
+html.dark input:focus-visible,
+html.dark textarea:focus-visible,
+html.dark [role="button"]:focus-visible {
+  outline-color: #04f06a !important;
+}
+
+body,
+body *,
+button,
+input,
+textarea {
+  font-family: Aptos, "Segoe UI", Arial, sans-serif !important;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible {
+  outline: 3px solid var(--ia4ops-purple) !important;
+  outline-offset: 3px;
+}
+
+#chat-submit {
+  background-color: var(--ia4ops-purple) !important;
+  color: #ffffff !important;
+  transition: background-color 140ms ease, transform 140ms ease;
+}
+
+#chat-submit:hover {
+  background-color: var(--ia4ops-navy) !important;
+}
+
+#chat-submit:active {
+  transform: translateY(1px);
+}
+
+html.dark #message-composer {
+  border: 1px solid #04f06a;
+  background: #451dc7 !important;
+}
+
+html.dark #message-composer textarea {
+  color: #ffffff;
+  caret-color: #04f06a;
+}
+
+html.dark #message-composer textarea::placeholder {
+  color: #f6f6f6;
+  opacity: 0.8;
+}
+
+html.dark #chat-submit {
+  background-color: #04f06a !important;
+  color: #250f6b !important;
+}
+
+html.dark #chat-submit:hover {
+  background-color: #cafee0 !important;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  color: var(--ia4ops-purple);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+html.dark .prose h1,
+html.dark .prose h2,
+html.dark .prose h3,
+html.dark .prose h4 {
+  color: #04f06a;
+}
+
+.ai-message:has(.prose h2 + blockquote) .message-content {
+  border: 1px solid #ffca4a;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  background: #f6f6f6;
+}
+
+.ai-message:has(.prose h2 + blockquote) .prose > h2:first-child {
+  margin-top: 0;
+}
+
+.ai-message:has(.prose h2 + blockquote) .prose > blockquote {
+  margin: 1rem 0;
+  padding: 0.85rem 1rem;
+  border-left: 0.3rem solid #ffca4a;
+  border-radius: 0.4rem;
+  background: #ffca4a;
+  color: #250f6b;
+}
+
+html.dark .ai-message:has(.prose h2 + blockquote) .message-content {
+  background: #250f6b;
+}
+
+html.dark .ai-message:has(.prose h2 + blockquote) .prose > blockquote {
+  background: #ffca4a;
+  color: #250f6b;
+}
+
+.ai-message:has(.prose h2 + blockquote) button:has(svg.lucide-search) {
+  border: 1px solid var(--ia4ops-purple) !important;
+  border-radius: 0.5rem !important;
+  background: var(--ia4ops-purple) !important;
+  color: #ffffff !important;
+}
+
+.ai-message:has(.prose h2 + blockquote) button:has(svg.lucide-search):hover {
+  background: var(--ia4ops-navy) !important;
+}
+
+html.dark .ai-message:has(.prose h2 + blockquote) button:has(svg.lucide-search) {
+  border-color: #04f06a !important;
+  background: #04f06a !important;
+  color: #250f6b !important;
+}
+
+html.dark .ai-message:has(.prose h2 + blockquote) button:has(svg.lucide-search):hover {
+  background: #cafee0 !important;
+}
+
+.ai-message:has(.prose h2 + blockquote) button:has(svg.lucide-x) {
+  border: 1px solid var(--ia4ops-purple) !important;
+  border-radius: 0.5rem !important;
+  background: #ffffff !important;
+  color: var(--ia4ops-purple) !important;
+}
+
+.ai-message:has(.prose h2 + blockquote) button:has(svg.lucide-x):hover {
+  background: var(--ia4ops-surface) !important;
+}
+
+pre,
+code {
+  border-radius: 0.5rem;
+}
+
+hr {
+  border-color: var(--ia4ops-border);
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

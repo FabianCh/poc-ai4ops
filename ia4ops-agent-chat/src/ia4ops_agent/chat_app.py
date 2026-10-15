@@ -161,7 +161,13 @@ def format_pending_alert(alert: dict[str, Any]) -> str:
     """Présente le résumé Alertmanager avant toute collecte ou analyse."""
     services = ", ".join(alert.get("affected_services") or [alert.get("service", "unknown")])
     lines = [
-        "## Nouvelle alerte Alertmanager — décision requise",
+        "## ⚠️ Alerte à traiter — décision opérateur requise",
+        "",
+        "> **NOUVELLE ALERTE — EN ATTENTE DE VOTRE DÉCISION**  \n"
+        "> Alertmanager a transmis cet événement. Aucune collecte ni aucun diagnostic ne démarre "
+        "sans votre choix.",
+        "",
+        "### Détails de l'alerte",
         f"- **Alerte** : `{alert.get('alert_name', 'unknown')}`",
         f"- **Service(s)** : {services}",
         f"- **Namespace** : `{alert.get('namespace', 'unknown')}`",
@@ -176,8 +182,8 @@ def format_pending_alert(alert: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "Souhaitez-vous que je lance une investigation en lecture seule ?",
-            "Aucune collecte ni diagnostic n'a été démarré par la réception du webhook.",
+            "Choisissez une action ci-dessous : lancer une investigation en lecture seule ou "
+            "ignorer cette alerte.",
         ]
     )
     return "\n".join(lines)
@@ -269,13 +275,24 @@ async def on_chat_start() -> None:
     )
     await cl.Message(
         content=(
-            "# IA4Ops — investigation SRE\n\n"
-            "Demandez une investigation en lecture seule avec :\n\n"
+            "# IA4Ops\n"
+            "### Assistant d'investigation SRE\n\n"
+            "Analysez les signaux d'un service et obtenez un diagnostic argumenté, "
+            "en **lecture seule**.\n\n"
+            "---\n\n"
+            "#### Lancer une investigation\n"
+            "Saisissez une demande au format :\n\n"
             "`/investigate <service> [minutes] | <question>`\n\n"
-            "Exemple : `/investigate product-catalog 15 | Pourquoi le taux d'erreur augmente ?`\n\n"
-            "Fenêtre autorisée : 1 à 60 minutes. Namespace : `otel-demo`.\n\n"
-            f"{llm_mode}\n\n{data_mode}\n\n"
-            "Les remédiations sont uniquement suggérées, jamais exécutées."
+            "> `/investigate product-catalog 15 | Pourquoi le taux d'erreur augmente ?`\n\n"
+            "Fenêtre : **1 à 60 minutes** · Namespace : `otel-demo`\n\n"
+            "---\n\n"
+            "#### Comment ça fonctionne\n"
+            "- Les alertes entrantes attendent votre décision : **Investiguer** ou **Ignorer**.\n"
+            "- Les observations, le diagnostic et ses limites sont présentés séparément.\n"
+            "- Les pistes de remédiation sont des suggestions ; "
+            "**aucune action n'est exécutée**.\n\n"
+            f"**Mode IA** · {llm_mode}\n\n"
+            f"**Sources** · {data_mode}"
         )
     ).send()
     await _notify_pending_alerts()
