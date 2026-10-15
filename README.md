@@ -53,6 +53,8 @@ certificat Let's Encrypt automatiquement.
 | [`manifest/base/`](manifest/base/) | Socle : cert-manager, ClusterIssuers Let's Encrypt, observabilité (kube-prometheus-stack, Loki, Alloy) |
 | [`manifest/applications/`](manifest/applications/) | Applications : `demo-whoami`, `otel-demo` (OpenTelemetry Demo), `ia4ops-agent` (agent IA, webhook Alertmanager), `keep` (console d'alertes) |
 | [`ia4ops-agent/`](ia4ops-agent/) | Agent IA de diagnostic (FastAPI + LangGraph), image `ghcr.io/fabianch/poc-ai4ops/ia4ops-agent` |
+| [`ia4ops-agent-chat/`](ia4ops-agent-chat/) | Copie expérimentale avec interface chatbot Chainlit, investigation à la demande et approbation d'alertes |
+| [`GUIDE-DIRECTION-ARTISTIQUE-IHM.md`](GUIDE-DIRECTION-ARTISTIQUE-IHM.md) | Guide visuel Wavestone pour l'IHM IA4Ops/Chainlit |
 | [`bin/`](bin/) | Kubeconfig, upgrade Flux, validation des manifests |
 | [`docs/`](docs/) | Endpoints, accès depuis Cloud Shell, coûts |
 | `Makefile` | Raccourcis (`make help`) |
@@ -64,6 +66,7 @@ certificat Let's Encrypt automatiquement.
 | [docs/endpoints.md](docs/endpoints.md) | Tous les endpoints : publics (Grafana, OTel Demo, feature flags…), API, services internes |
 | [docs/cloudshell.md](docs/cloudshell.md) | Récupérer URLs, mot de passe Grafana et kubeconfig depuis Cloud Shell |
 | [docs/couts.md](docs/couts.md) | Coût de la VM 24/7, à la journée, arrêtée ; recommandations |
+| [GUIDE-DIRECTION-ARTISTIQUE-IHM.md](GUIDE-DIRECTION-ARTISTIQUE-IHM.md) | Principes visuels, couleurs, composants et accessibilité de l'IHM Chainlit |
 
 ## Tester le POC
 

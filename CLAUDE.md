@@ -22,6 +22,7 @@ manifest/
   applications/        # Workloads exposed on the cluster
 ia4ops-agent/          # AI diagnosis agent (Python 3.14, uv, FastAPI + LangGraph) + Dockerfile
                        # image built/pushed to ghcr.io by .github/workflows/ia4ops-agent.yml on main
+ia4ops-agent-chat/     # Experimental independent Chainlit chatbot; see GUIDE-DIRECTION-ARTISTIQUE-IHM.md
 bin/                   # Helper scripts (kubeconfig, flux upgrade, manifest validation, create-keep-secrets, get-secrets)
 ```
 
@@ -39,6 +40,10 @@ bin/                   # Helper scripts (kubeconfig, flux upgrade, manifest vali
 - The repo is public and there is no secret management (POC): never commit secrets or credentials. Secrets
   a workload needs (e.g. Keep) are created out of Git by a script in `bin/` (`make create-keep-secrets`) and
   referenced by name in the manifests; pods wait for them rather than starting unprotected.
+- When changing the Chainlit interface in `ia4ops-agent-chat/`, follow
+  [`GUIDE-DIRECTION-ARTISTIQUE-IHM.md`](GUIDE-DIRECTION-ARTISTIQUE-IHM.md). Keep the interface read-only,
+  distinguish mock data from collected observations, and do not expose it publicly before authentication
+  is implemented and verified.
 
 ## Checks
 

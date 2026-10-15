@@ -3,6 +3,9 @@
 Cette application est une **copie indépendante** de `ia4ops-agent`, créée pour développer une
 interface chatbot Chainlit sans modifier l'agent stable.
 
+Pour toute évolution visuelle de l'interface, suivre le
+[guide de direction artistique IA4Ops](../GUIDE-DIRECTION-ARTISTIQUE-IHM.md).
+
 > **État** : interface Chainlit, investigation manuelle et parcours d'approbation Alertmanager
 > implémentés ; validation navigateur, authentification et déploiement isolé restent à faire.
 > Ce projet ne remplace pas `ia4ops-agent`.
