@@ -32,23 +32,23 @@ html:not(.dark) {
 }
 
 html.dark {
-  --background: 254 75% 24% !important;
+  --background: 255 58% 10% !important;
   --foreground: 0 0% 100% !important;
-  --card: 255 75% 45% !important;
+  --card: 254 62% 17% !important;
   --card-foreground: 0 0% 100% !important;
-  --popover: 254 75% 24% !important;
+  --popover: 255 58% 10% !important;
   --popover-foreground: 0 0% 100% !important;
   --primary: 147 97% 48% !important;
-  --primary-foreground: 254 75% 24% !important;
-  --secondary: 254 75% 24% !important;
+  --primary-foreground: 255 58% 10% !important;
+  --secondary: 254 62% 17% !important;
   --secondary-foreground: 0 0% 100% !important;
-  --muted: 254 75% 24% !important;
+  --muted: 254 62% 17% !important;
   --muted-foreground: 0 0% 92% !important;
-  --accent: 254 75% 24% !important;
+  --accent: 254 62% 17% !important;
   --accent-foreground: 0 0% 100% !important;
   --destructive: 351 100% 58% !important;
   --destructive-foreground: 0 0% 100% !important;
-  --border: 255 75% 45% !important;
+  --border: 254 62% 30% !important;
   --input: 147 97% 48% !important;
   --ring: 147 97% 48% !important;
   --radius: 0.65rem !important;
@@ -93,9 +93,24 @@ textarea:focus-visible,
   transform: translateY(1px);
 }
 
+#message-composer textarea,
+#message-composer textarea:focus,
+#message-composer textarea:focus-visible {
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
 html.dark #message-composer {
-  border: 1px solid #04f06a;
-  background: #451dc7 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  background: #250f6b !important;
+}
+
+html.dark #message-composer:focus-within {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
 }
 
 html.dark #message-composer textarea {
@@ -110,11 +125,24 @@ html.dark #message-composer textarea::placeholder {
 
 html.dark #chat-submit {
   background-color: #04f06a !important;
-  color: #250f6b !important;
+  color: #130b2a !important;
 }
 
 html.dark #chat-submit:hover {
   background-color: #cafee0 !important;
+}
+
+img[alt="Avatar for IA4Ops"] {
+  content: url("/chat/public/wavestone_W_logo_color.svg");
+  object-fit: contain;
+}
+
+html.dark img[src$="logo_light.svg"] {
+  content: url("/chat/public/logo_dark.svg");
+}
+
+html.dark img[alt="Avatar for IA4Ops"] {
+  filter: brightness(0) invert(1);
 }
 
 .prose h1,

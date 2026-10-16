@@ -113,7 +113,7 @@ reaction_on_message_received = false
         allowed_urls = []
 
 [UI]
-name = "IA4Ops — Ops Assistant"
+name = "IA4Ops"
 
 default_theme = "light"
 layout = "wide"
@@ -175,7 +175,7 @@ alert_style = "classic"
 # custom_meta_image_url = "https://chainlit-cloud.s3.eu-west-3.amazonaws.com/logo/chainlit_banner.png"
 
 # Load assistant logo directly from URL.
-logo_file_url = ""
+logo_file_url = "/chat/public/logo_light.svg"
 
 # Load assistant avatar image directly from URL.
 default_avatar_file_url = ""

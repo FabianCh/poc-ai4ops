@@ -42,12 +42,13 @@ L'API est disponible sur `http://localhost:8000`, sa documentation sur `/docs` e
 L'interface reprend la palette du guide IA4Ops/Wavestone, avec un thème clair par défaut, un thème
 sombre compatible, une typographie Aptos avec repli système et des styles clavier visibles. Le thème
 et les ajustements CSS sont propres à cette copie (`public/theme.json` et `public/custom.css`).
-Aucun logo Wavestone n'est inclus : seules des ressources officielles fournies pourront être
-ajoutées.
-En thème sombre, le vert de la palette met en évidence les titres et le bouton d'envoi, tandis que
-la zone de saisie dispose d'une surface et d'une bordure distinctes. Les alertes en attente ont un
-en-tête d'avertissement et un panneau visuel dédié rappelant qu'aucune investigation ne démarre sans
-décision de l'opérateur.
+Les logos Wavestone officiels fournis sont utilisés pour le logo de l'application et son avatar W,
+avec une variante blanche en thème sombre (`public/logo_light.svg`, `public/logo_dark.svg` et
+`public/wavestone_W_logo_color.svg`). En thème sombre, le fond est bleu nuit plus profond, le vert de
+la palette met en évidence les titres et le bouton d'envoi, et la zone de saisie conserve une surface
+distincte sans encadrement au focus (dans les deux thèmes). Les alertes en attente ont un en-tête
+d'avertissement et un panneau visuel dédié rappelant qu'aucune investigation ne démarre avant décision
+de l'opérateur.
 
 ### Demander une investigation
 
