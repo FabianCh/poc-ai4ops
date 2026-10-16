@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ia4ops-agent-chat
+images:
+- name: ghcr.io/fabianch/poc-ai4ops/ia4ops-agent-chat
+  newTag: latest
+labels:
+- includeSelectors: false
+  includeTemplates: true
+  pairs:
+    app.kubernetes.io/name: ia4ops-agent-chat
+    app.kubernetes.io/instance: ia4ops-agent-chat
+resources:
+- ia4ops-agent-chat-namespace.yaml
+- ia4ops-agent-chat-pvc.yaml
+- ia4ops-agent-chat-deployment.yaml
+- ia4ops-agent-chat-service.yaml
+- ia4ops-agent-chat-networkpolicy.yaml

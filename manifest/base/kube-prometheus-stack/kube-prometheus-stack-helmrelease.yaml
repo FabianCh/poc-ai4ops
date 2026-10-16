@@ -84,7 +84,8 @@ spec:
       # namespace keep) puis, pour le namespace otel-demo, à l'agent ia4ops-agent (webhook
       # Alertmanager v4) ; le reste va au receiver "null". route et receivers remplacent ceux
       # du chart (les listes Helm ne fusionnent pas) ; inhibit_rules et global restent ceux
-      # par défaut.
+      # par défaut. Les alertes otel-demo sont aussi proposées au chatbot, sans retirer
+      # le receiver de l'agent stable.
       config:
         route:
           group_by: [namespace]
@@ -111,11 +112,21 @@ spec:
             - namespace = "otel-demo"
             group_by: [namespace, alertname]
             repeat_interval: 4h
+            continue: true
+          - receiver: ia4ops-agent-chat
+            matchers:
+            - namespace = "otel-demo"
+            group_by: [namespace, alertname]
+            repeat_interval: 4h
         receivers:
         - name: "null"
         - name: ia4ops-agent
           webhook_configs:
           - url: http://ia4ops-agent.ia4ops.svc:8000/webhooks/alertmanager
+            send_resolved: true
+        - name: ia4ops-agent-chat
+          webhook_configs:
+          - url: http://ia4ops-agent-chat.ia4ops-agent-chat.svc:8000/webhooks/alertmanager
             send_resolved: true
         # Clé d'API (rôle webhook) lue dans un fichier : Secret keep-alertmanager-api-key créé
         # par `make create-keep-secrets`, jamais dans Git.

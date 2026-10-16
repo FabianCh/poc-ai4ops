@@ -1,0 +1,70 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: ia4ops-agent-chat
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+---
+# Le port-forward n'est pas soumis aux NetworkPolicies ; seul Alertmanager peut
+# joindre le webhook depuis le réseau du cluster.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-alertmanager-webhook
+  namespace: ia4ops-agent-chat
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ia4ops-agent-chat
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: alertmanager
+    ports:
+    - protocol: TCP
+      port: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  namespace: ia4ops-agent-chat
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+---
+# DNS suffit au profil de déploiement mock ; pas de sortie vers Internet ou Grafana.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cluster-dns
+  namespace: ia4ops-agent-chat
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ia4ops-agent-chat
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53

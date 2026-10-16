@@ -67,11 +67,16 @@ kubeconfig, ou depuis Cloud Shell avec l'aperçu web, voir [cloudshell.md](cloud
 | OTel Collector | `otel-demo/otel-collector` | 4317 (gRPC), 4318 (HTTP) | `kubectl -n otel-demo port-forward svc/otel-collector 4317 4318` |
 | flagd | `otel-demo/flagd` | 8013 (gRPC), 8016 (OFREP) | `kubectl -n otel-demo port-forward svc/flagd 8013 8016` |
 | Agent ia4ops (`/api/v1/incidents/{id}`, `/docs`) | `ia4ops/ia4ops-agent` | 8000 | `kubectl -n ia4ops port-forward svc/ia4ops-agent 8000` |
+| Chatbot IA4Ops (IHM + API) | `ia4ops-agent-chat/ia4ops-agent-chat` | 8000 | `kubectl -n ia4ops-agent-chat port-forward --address 127.0.0.1 svc/ia4ops-agent-chat 8000:8000` |
 | Keep backend (API, webhook Alertmanager `/alerts/event/prometheus`) | `keep/keep-backend` | 8080 | `kubectl -n keep port-forward svc/keep-backend 8080` |
 
 L'agent `ia4ops-agent` n'accepte en entrée que les webhooks d'Alertmanager : une NetworkPolicy
 refuse tout autre trafic vers le namespace `ia4ops`, sauf depuis les pods Alertmanager du
 namespace `monitoring` (port 8000). `kubectl port-forward` n'est pas soumis aux NetworkPolicies.
+
+Le chatbot est privé : aucun Ingress n'est créé. Ouvrir l'IHM via le port-forward ci-dessus sur
+`http://localhost:8000/chat/`. Le tunnel est lié à l'interface loopback du poste ; tout utilisateur
+ayant les droits Kubernetes de port-forward vers le namespace peut toutefois accéder à l'application.
 
 Le backend de Keep n'accepte les webhooks d'Alertmanager qu'avec une clé d'API (rôle `webhook`) et une
 NetworkPolicy limite ses entrées à Traefik (interface publique), aux pods Alertmanager du namespace

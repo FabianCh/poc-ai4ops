@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ia4ops-agent-chat
+  namespace: ia4ops-agent-chat
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ia4ops-agent-chat
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ia4ops-agent-chat
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: ia4ops-agent-chat
+        image: ghcr.io/fabianch/poc-ai4ops/ia4ops-agent-chat
+        imagePullPolicy: Always
+        env:
+        - name: LLM_PROVIDER
+          value: mock
+        - name: REQUEST_INTERPRETER_PROVIDER
+          value: disabled
+        - name: DATA_PROVIDER
+          value: mock
+        - name: AUDIT_DIR
+          value: /app/audit_logs
+        - name: HOME
+          value: /tmp
+        ports:
+        - name: http
+          containerPort: 8000
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+          limits:
+            memory: 1Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: audit
+          mountPath: /app/audit_logs
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: audit
+        persistentVolumeClaim:
+          claimName: ia4ops-agent-chat-audit
+      - name: tmp
+        emptyDir: {}

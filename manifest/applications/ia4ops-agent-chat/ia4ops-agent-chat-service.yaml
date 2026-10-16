@@ -1,0 +1,13 @@
+# Service interne uniquement ; accès utilisateur via kubectl port-forward.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ia4ops-agent-chat
+  namespace: ia4ops-agent-chat
+spec:
+  selector:
+    app.kubernetes.io/name: ia4ops-agent-chat
+  ports:
+  - name: http
+    port: 8000
+    targetPort: http

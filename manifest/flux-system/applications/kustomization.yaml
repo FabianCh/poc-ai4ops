@@ -5,4 +5,5 @@ resources:
 - demo-whoami-ks.yaml
 - otel-demo-ks.yaml
 - ia4ops-agent-ks.yaml
+- ia4ops-agent-chat-ks.yaml
 - keep-ks.yaml
