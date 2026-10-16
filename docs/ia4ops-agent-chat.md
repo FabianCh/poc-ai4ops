@@ -18,8 +18,9 @@ n'est créé.
 - Les événements d'audit sont stockés sur un PVC local-path ; l'état des alertes en attente reste
   en mémoire et est perdu si le pod redémarre.
 - Le Dockerfile embarque `.chainlit/config.toml` et les assets `public/` (thèmes, CSS, logos)
-  dans l'image runtime. `/app/.files` est monté sur un `emptyDir` inscriptible, requis même quand
-  l'IHM n'active pas l'upload de fichiers ; son contenu temporaire disparaît au redémarrage du pod.
+  dans l'image runtime. `/app/.files` et `/app/.chainlit/translations` sont montés sur des
+  `emptyDir` inscriptibles : Chainlit exige leur écriture au démarrage même si l'IHM n'active pas
+  l'upload de fichiers. Leur contenu temporaire disparaît au redémarrage du pod.
 
 Pour activer l'interpréteur naturel et les providers réels dans le cluster, il faudra provisionner
 les Secrets hors Git, configurer les sorties réseau nécessaires vers Vertex AI et Grafana, puis

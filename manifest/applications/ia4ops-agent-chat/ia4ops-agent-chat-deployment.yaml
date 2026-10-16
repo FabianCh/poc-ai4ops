@@ -70,6 +70,8 @@ spec:
           mountPath: /app/audit_logs
         - name: chainlit-files
           mountPath: /app/.files
+        - name: chainlit-translations
+          mountPath: /app/.chainlit/translations
         - name: tmp
           mountPath: /tmp
       volumes:
@@ -77,6 +79,8 @@ spec:
         persistentVolumeClaim:
           claimName: ia4ops-agent-chat-audit
       - name: chainlit-files
+        emptyDir: {}
+      - name: chainlit-translations
         emptyDir: {}
       - name: tmp
         emptyDir: {}
