@@ -12,6 +12,9 @@ n'est créé.
   Le provider Kubernetes demeure non implémenté et signalera la source indisponible.
 - Le webhook Alertmanager est routé en parallèle à l'agent stable. Les alertes du namespace
   `otel-demo` restent en attente et n'exécutent aucun diagnostic avant confirmation opérateur.
+- Après confirmation, les investigations manuelles et celles issues d'une alerte affichent un seul
+  message de progression actualisé avec un indicateur animé et l'étape active ; le rapport final
+  remplace ce message lorsque le diagnostic est terminé.
 - Un webhook synthétique peut aussi être envoyé manuellement à
   `http://localhost:8000/webhooks/alertmanager` pendant que le port-forward est actif. Il sera
   traité par la même validation, déduplication et attente d'approbation que les alertes réelles.

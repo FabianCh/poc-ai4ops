@@ -18,6 +18,7 @@ _DEFAULT_QUESTION = "Analyser les signaux disponibles et proposer les prochaines
 _POLL_INTERVAL_SECONDS = 1
 _POLL_TIMEOUT_SECONDS = 180
 _ALERT_POLL_INTERVAL_SECONDS = 3
+_SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
 
 
 def parse_investigation_message(message: str) -> InvestigationRequest:
@@ -172,18 +173,13 @@ def format_investigation_confirmation(investigation: InvestigationRequest) -> st
 def format_investigation_progress(
     service: str,
     current_step: str,
-    completed_steps: list[str],
+    spinner_frame: str = _SPINNER_FRAMES[0],
 ) -> str:
-    """Render workflow progress from completed graph nodes."""
-    lines = [
-        f"Investigation de `{service}` en cours…",
-        "",
-        f"🔄 **{current_step or 'Préparation de l’investigation'}**",
-    ]
-    if completed_steps:
-        lines.extend(["", "Étapes terminées :"])
-        lines.extend(f"✅ {step}" for step in completed_steps)
-    return "\n".join(lines)
+    """Render the active graph step with an animated indicator."""
+    return (
+        f"Investigation de `{service}` en cours…\n\n"
+        f"{spinner_frame} **{current_step or 'Préparation de l’investigation'}**"
+    )
 
 
 def format_pending_alert(alert: dict[str, Any]) -> str:
@@ -247,7 +243,10 @@ async def _notify_pending_alerts() -> None:
         actions = [
             cl.Action(
                 name="investigate_alert",
-                payload={"incident_id": incident_id},
+                payload={
+                    "incident_id": incident_id,
+                    "service": alert.get("service"),
+                },
                 label="Investiguer",
                 icon="search",
             ),
@@ -269,24 +268,58 @@ async def _poll_alerts_until_chat_ends() -> None:
         await _notify_pending_alerts()
 
 
-async def _wait_for_alert_report(incident_id: str) -> dict[str, Any]:
+async def _track_investigation(
+    incident_id: str,
+    service: str,
+    progress: cl.Message,
+) -> None:
+    """Update one Chainlit message until the graph completes or fails."""
     deadline = time.monotonic() + _POLL_TIMEOUT_SECONDS
     async with httpx.AsyncClient(
         base_url=f"http://127.0.0.1:{settings.port}", timeout=15
     ) as client:
+        spinner_index = 0
         while time.monotonic() < deadline:
             response = await client.get(f"/api/v1/incidents/{incident_id}")
             if response.status_code != 200:
-                raise RuntimeError(_response_detail(response))
+                progress.content = (
+                    f"Impossible de consulter l'investigation `{incident_id}` : "
+                    f"{_response_detail(response)}"
+                )
+                await progress.update()
+                return
             incident = response.json()
             if incident["status"] in {"completed", "completed_with_errors"}:
-                return incident
-            if incident["status"] in {"failed", "ignored", "resolved"}:
-                raise RuntimeError(
-                    f"Investigation terminée avec l'état `{incident['status']}`."
+                progress.content = format_report(
+                    incident.get("report") or {},
+                    settings.llm_provider,
+                    settings.data_provider,
                 )
+                await progress.update()
+                return
+            if incident["status"] in {"failed", "ignored", "resolved"}:
+                progress.content = (
+                    f"Investigation `{incident_id}` terminée avec l'état "
+                    f"`{incident['status']}` : "
+                    f"{incident.get('failure') or 'aucun rapport disponible'}"
+                )
+                await progress.update()
+                return
+
+            progress.content = format_investigation_progress(
+                service,
+                incident.get("progress") or "",
+                _SPINNER_FRAMES[spinner_index],
+            )
+            await progress.update()
+            spinner_index = (spinner_index + 1) % len(_SPINNER_FRAMES)
             await asyncio.sleep(_POLL_INTERVAL_SECONDS)
-    raise TimeoutError(f"L'investigation `{incident_id}` n'est pas terminée après 180 secondes.")
+
+    progress.content = (
+        f"L'investigation `{incident_id}` est toujours en cours. "
+        f"Consultez son état via `GET /api/v1/incidents/{incident_id}`."
+    )
+    await progress.update()
 
 
 @cl.on_chat_start
@@ -476,7 +509,9 @@ async def confirm_investigation(action: cl.Action) -> None:
         return
 
     await action.remove()
-    progress = cl.Message(content=f"Investigation de `{investigation.service}` en cours…")
+    progress = cl.Message(
+        content=format_investigation_progress(investigation.service, "")
+    )
     await progress.send()
     base_url = f"http://127.0.0.1:{settings.port}"
     try:
@@ -494,52 +529,7 @@ async def confirm_investigation(action: cl.Action) -> None:
                 return
 
             incident_id = accepted_response.json()["incident_id"]
-            deadline = time.monotonic() + _POLL_TIMEOUT_SECONDS
-            last_progress: tuple[str, tuple[str, ...]] | None = None
-            while time.monotonic() < deadline:
-                response = await client.get(f"/api/v1/incidents/{incident_id}")
-                if response.status_code != 200:
-                    progress.content = (
-                        f"Impossible de consulter l'investigation `{incident_id}` : "
-                        f"{_response_detail(response)}"
-                    )
-                    await progress.update()
-                    return
-                incident = response.json()
-                if incident["status"] in {"pending", "running"}:
-                    current_step = incident.get("progress") or ""
-                    completed_steps = tuple(incident.get("completed_steps") or [])
-                    progress_state = (current_step, completed_steps)
-                    if progress_state != last_progress:
-                        progress.content = format_investigation_progress(
-                            investigation.service,
-                            current_step,
-                            list(completed_steps),
-                        )
-                        await progress.update()
-                        last_progress = progress_state
-                if incident["status"] in {"completed", "completed_with_errors"}:
-                    progress.content = format_report(
-                        incident.get("report") or {},
-                        settings.llm_provider,
-                        settings.data_provider,
-                    )
-                    await progress.update()
-                    return
-                if incident["status"] == "failed":
-                    progress.content = (
-                        f"L'investigation `{incident_id}` a échoué : "
-                        f"{incident.get('failure') or 'erreur non détaillée'}"
-                    )
-                    await progress.update()
-                    return
-                await asyncio.sleep(_POLL_INTERVAL_SECONDS)
-
-            progress.content = (
-                f"L'investigation `{incident_id}` est toujours en cours. "
-                "Consultez son état via l'API `GET /api/v1/incidents/{incident_id}`."
-            )
-            await progress.update()
+        await _track_investigation(incident_id, investigation.service, progress)
     except httpx.RequestError as exc:
         progress.content = f"API IA4Ops injoignable sur `{base_url}` : {exc}"
         await progress.update()
@@ -567,10 +557,14 @@ async def cancel_investigation(action: cl.Action) -> None:
 @cl.action_callback("investigate_alert")
 async def investigate_alert(action: cl.Action) -> None:
     incident_id = action.payload.get("incident_id")
+    service = action.payload.get("service")
     if not isinstance(incident_id, str):
         await cl.Message(content="Action invalide : identifiant d'alerte manquant.").send()
         return
+    if not isinstance(service, str) or not service:
+        service = "service concerné par l'alerte"
 
+    progress: cl.Message | None = None
     try:
         async with httpx.AsyncClient(
             base_url=f"http://127.0.0.1:{settings.port}", timeout=15
@@ -589,22 +583,16 @@ async def investigate_alert(action: cl.Action) -> None:
                 if response.status_code == 409:
                     await action.remove()
                 return
-            await action.remove()
-            await cl.Message(
-                content=f"Investigation approuvée pour `{incident_id}`."
-            ).send()
-            result = await _wait_for_alert_report(incident_id)
-            await cl.Message(
-                content=format_report(
-                    result.get("report") or {},
-                    settings.llm_provider,
-                    settings.data_provider,
-                )
-            ).send()
+        await action.remove()
+        progress = cl.Message(content=format_investigation_progress(service, ""))
+        await progress.send()
+        await _track_investigation(incident_id, service, progress)
     except httpx.RequestError as exc:
-        await cl.Message(content=f"API IA4Ops injoignable : {exc}").send()
-    except (RuntimeError, TimeoutError) as exc:
-        await cl.Message(content=str(exc)).send()
+        if progress is None:
+            await cl.Message(content=f"API IA4Ops injoignable : {exc}").send()
+        else:
+            progress.content = f"API IA4Ops injoignable : {exc}"
+            await progress.update()
 
 
 @cl.action_callback("ignore_alert")

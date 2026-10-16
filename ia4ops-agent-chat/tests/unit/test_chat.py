@@ -2,8 +2,10 @@
 
 import pytest
 
+import ia4ops_agent.chat_app as chat_app
 from ia4ops_agent.api.models import InvestigationRequest
 from ia4ops_agent.chat_app import (
+    _track_investigation,
     format_investigation_confirmation,
     format_investigation_progress,
     format_pending_alert,
@@ -60,17 +62,70 @@ def test_investigation_confirmation_shows_parameters_before_starting() -> None:
     assert "Aucune collecte ni aucun diagnostic ne démarre avant votre confirmation" in content
 
 
-def test_investigation_progress_shows_active_and_completed_steps() -> None:
+def test_investigation_progress_shows_spinner_and_only_the_active_step() -> None:
     content = format_investigation_progress(
         "checkout",
         "Collecte des traces",
-        ["Préparation de l'investigation", "Collecte des métriques"],
+        "⠙",
     )
 
     assert "Investigation de `checkout` en cours" in content
-    assert "🔄 **Collecte des traces**" in content
-    assert "✅ Préparation de l'investigation" in content
-    assert "✅ Collecte des métriques" in content
+    assert "⠙ **Collecte des traces**" in content
+    assert "Étapes terminées" not in content
+
+
+async def test_investigation_tracker_updates_one_message_through_completion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    incidents = iter(
+        [
+            {"status": "running", "progress": "Collecte des métriques"},
+            {"status": "running", "progress": "Collecte des logs"},
+            {"status": "completed", "report": {"result": "ok"}},
+        ]
+    )
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self) -> dict:
+            return next(incidents)
+
+    class FakeClient:
+        def __init__(self, **_: object) -> None:
+            pass
+
+        async def __aenter__(self) -> FakeClient:
+            return self
+
+        async def __aexit__(self, *_: object) -> None:
+            return None
+
+        async def get(self, _: str) -> FakeResponse:
+            return FakeResponse()
+
+    class ProgressMessage:
+        content = ""
+
+        def __init__(self) -> None:
+            self.updates: list[str] = []
+
+        async def update(self) -> None:
+            self.updates.append(self.content)
+
+    async def no_sleep(_: float) -> None:
+        return None
+
+    progress = ProgressMessage()
+    monkeypatch.setattr(chat_app.httpx, "AsyncClient", FakeClient)
+    monkeypatch.setattr(chat_app.asyncio, "sleep", no_sleep)
+    monkeypatch.setattr(chat_app, "format_report", lambda *_: "Rapport final")
+
+    await _track_investigation("inc-test", "checkout", progress)
+
+    assert "⠋ **Collecte des métriques**" in progress.updates[0]
+    assert "⠙ **Collecte des logs**" in progress.updates[1]
+    assert progress.updates[2] == "Rapport final"
 
 
 def test_mock_report_rendering_distinguishes_real_observations_from_mock_diagnosis() -> None:
