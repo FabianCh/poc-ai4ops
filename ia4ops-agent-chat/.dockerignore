@@ -1,4 +1,4 @@
-# Uniquement pyproject.toml, uv.lock, README.md et src/ sont utiles au build
+# Les fichiers applicatifs, la configuration Chainlit et ses assets sont requis au build.
 .venv/
 **/__pycache__/
 **/*.py[cod]

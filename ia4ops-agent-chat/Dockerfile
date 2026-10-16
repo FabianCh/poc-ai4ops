@@ -37,6 +37,8 @@ RUN groupadd --system --gid 10001 app \
 
 WORKDIR /app
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
+COPY --from=builder --chown=app:app /app/.chainlit /app/.chainlit
+COPY --from=builder --chown=app:app /app/public /app/public
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1 \
