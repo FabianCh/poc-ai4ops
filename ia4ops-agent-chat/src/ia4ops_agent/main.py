@@ -25,6 +25,7 @@ from ia4ops_agent.graph.builder import build_graph
 from ia4ops_agent.integrations.keep import KeepClient
 from ia4ops_agent.integrations.keep_publisher import KeepPublisher
 from ia4ops_agent.llm.interface import FakeLLMClient
+from ia4ops_agent.llm.request_interpreter import create_request_interpreter
 from ia4ops_agent.providers.factory import Providers
 
 logging.basicConfig(
@@ -83,6 +84,21 @@ async def lifespan(app: FastAPI):
 
     # --- Initialiser l'état applicatif ---
     app.state.graph = graph
+    app.state.request_interpreter = create_request_interpreter(
+        provider=settings.request_interpreter_provider,
+        model_name=settings.request_interpreter_model,
+        project=settings.google_cloud_project,
+        location=settings.effective_location,
+    )
+    if app.state.request_interpreter is None:
+        logger.info(
+            "Interpréteur de langage naturel désactivé ; les commandes structurées restent actives."
+        )
+    else:
+        logger.info(
+            "Interpréteur de langage naturel activé (model=%s).",
+            settings.request_interpreter_model,
+        )
     app.state.incident_store: dict = {}
     app.state.dedup_cache: OrderedDict = OrderedDict()
     app.state.dedup_cache_max_size: int = settings.dedup_cache_max_size

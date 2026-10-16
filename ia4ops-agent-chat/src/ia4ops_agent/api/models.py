@@ -12,7 +12,7 @@ On ne re-définit pas les modèles d'entrée — on réexporte pour la lisibilit
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # Réexport du modèle de domaine — le webhook est déjà complet dans alerts.py
 from ia4ops_agent.domain.alerts import AlertmanagerWebhook as AlertWebhookRequest
@@ -27,6 +27,8 @@ __all__ = [
     "PendingAlert",
     "IncidentResponse",
     "InvestigationAccepted",
+    "InvestigationInterpretation",
+    "InvestigationInterpretationRequest",
     "InvestigationRequest",
 ]
 
@@ -99,6 +101,49 @@ class InvestigationRequest(BaseModel):
         if not value:
             raise ValueError("Cette valeur ne peut pas être vide.")
         return value
+
+
+class InvestigationInterpretationRequest(BaseModel):
+    """Demande textuelle à interpréter avant toute investigation."""
+
+    message: str = Field(min_length=1, max_length=2000)
+    previous_message: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("message", "previous_message")
+    @classmethod
+    def strip_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("Cette valeur ne peut pas être vide.")
+        return value
+
+
+class InvestigationInterpretation(BaseModel):
+    """Résultat borné de l'extraction d'une demande d'investigation."""
+
+    status: Literal["ready", "needs_clarification"]
+    service: str = Field(max_length=63)
+    window_minutes: int = Field(ge=1, le=60)
+    question: str = Field(max_length=500)
+    clarification_question: str = Field(max_length=500)
+
+    @field_validator("service", "question", "clarification_question")
+    @classmethod
+    def strip_text(cls, value: str) -> str:
+        return value.strip()
+
+    @model_validator(mode="after")
+    def validate_interpretation(self) -> InvestigationInterpretation:
+        if self.status == "ready":
+            if not self.service or not self.question:
+                raise ValueError("Une demande prête doit préciser le service et la question.")
+            if self.clarification_question:
+                raise ValueError("Une demande prête ne doit pas demander de précision.")
+        elif not self.clarification_question:
+            raise ValueError("Une précision doit être formulée pour une demande incomplète.")
+        return self
 
 
 class InvestigationAccepted(BaseModel):

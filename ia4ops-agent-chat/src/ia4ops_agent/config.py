@@ -6,6 +6,7 @@ Les valeurs par défaut correspondent à un environnement de développement loca
 """
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -40,6 +41,14 @@ class Settings(BaseSettings):
     # "mock" → FakeLLMClient, "gemini" → GeminiVertexClient
     llm_provider: str = Field(default="mock", alias="LLM_PROVIDER")
     data_provider: str = Field(default="mock", alias="DATA_PROVIDER")
+    request_interpreter_provider: Literal["disabled", "gemini"] = Field(
+        default="disabled",
+        alias="REQUEST_INTERPRETER_PROVIDER",
+    )
+    request_interpreter_model: str = Field(
+        default="gemini-2.5-flash",
+        alias="REQUEST_INTERPRETER_MODEL",
+    )
     # Nom du modèle Vertex AI — configurable sans toucher au code
     vertex_model: str = Field(default="gemini-2.0-flash", alias="LLM_MODEL")
 

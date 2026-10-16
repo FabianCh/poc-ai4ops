@@ -52,28 +52,48 @@ de l'opérateur.
 
 ### Demander une investigation
 
-Dans le chat, saisir une commande structurée :
+Si `REQUEST_INTERPRETER_PROVIDER=gemini`, décrire l'investigation en langage naturel :
 
 ```text
-/investigate <service> [minutes] | <question>
+Pourquoi checkout génère des erreurs depuis une demi-heure ?
 ```
 
-Exemple :
+L'interpréteur Gemini via Vertex AI extrait le service, la période et la question dans une réponse
+JSON contrainte. L'application valide ensuite les valeurs et demande une confirmation explicite
+avant de lancer l'investigation. Un service inconnu ou ambigu déclenche une demande de précision ;
+aucune collecte ne commence à ce stade. Les services proposés sont limités au catalogue OTel Demo.
+
+```text
+Demande comprise — confirmation requise
+Service : checkout · Fenêtre : 30 minutes
+Question : Pourquoi checkout génère-t-il des erreurs ?
+[Confirmer et investiguer] [Annuler]
+```
+
+La fenêtre par défaut est de 15 minutes et la limite est de 1 à 60 minutes. L'interpréteur n'a aucun
+outil et ne peut pas appeler les providers ni démarrer le graphe ; il ne remplit que les paramètres
+bornés. En cas de panne ou de réponse invalide, la demande échoue explicitement sans lancer
+l'investigation. L'ancienne commande reste disponible :
 
 ```text
 /investigate product-catalog 15 | Pourquoi le taux d'erreur augmente ?
 ```
 
-La durée est de 15 minutes par défaut et doit être comprise entre 1 et 60 minutes. Le namespace
-est actuellement fixé à `otel-demo`. Le service est traité comme un identifiant, pas comme une
-requête LogQL/PromQL. L'API `POST /api/v1/investigations` valide la demande, démarre le graphe en
-arrière-plan et retourne un identifiant consultable via `GET /api/v1/incidents/{incident_id}`.
+Le paramètre `REQUEST_INTERPRETER_PROVIDER` est indépendant de `LLM_PROVIDER` : sa valeur par
+défaut `disabled` évite tout appel LLM additionnel. Pour activer l'interprétation naturelle,
+configurer `REQUEST_INTERPRETER_PROVIDER=gemini` et renseigner les variables Vertex AI/GCP. Le
+diagnostic reste en mock si `LLM_PROVIDER=mock`. L'API `POST /api/v1/investigations/interpret`
+ne fait qu'interpréter ; seul `POST /api/v1/investigations`, appelé après confirmation opérateur,
+démarre le graphe.
 
-`LLM_PROVIDER=mock` est le défaut et n'appelle pas Vertex AI. Le diagnostic FakeLLM est préconfiguré
-et ne reflète pas nécessairement les données de la collecte ; l'IHM avertit l'opérateur et affiche
-séparément les observations issues des providers. `DATA_PROVIDER=mock` (défaut) produit aussi des
-observations synthétiques. `DATA_PROVIDER=real` active Prometheus/Loki via Grafana (`GRAFANA_*`)
-sans activer Gemini. Les providers Kubernetes réels ne sont pas implémentés.
+`LLM_PROVIDER=mock` est le défaut pour le **diagnostic** et n'appelle pas Vertex AI. Si
+`REQUEST_INTERPRETER_PROVIDER=gemini`, Vertex AI est appelé uniquement pour interpréter chaque
+message naturel avant la confirmation ; le diagnostic demeure mock. Le diagnostic FakeLLM est
+préconfiguré et ne reflète pas nécessairement les données de la collecte ; l'IHM avertit
+l'opérateur et affiche séparément les observations issues des providers. `DATA_PROVIDER=mock`
+(défaut) produit aussi des observations synthétiques. `DATA_PROVIDER=real` active Prometheus/Loki
+via Grafana (`GRAFANA_*`) sans activer Gemini pour le diagnostic. Les providers Kubernetes réels
+ne sont pas implémentés.
 
 ### Alertes Alertmanager
 

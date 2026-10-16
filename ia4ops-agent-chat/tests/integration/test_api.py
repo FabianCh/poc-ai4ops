@@ -26,6 +26,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
+from ia4ops_agent.api.models import InvestigationInterpretation
 from ia4ops_agent.config import settings
 from ia4ops_agent.integrations.keep import KeepAPIError
 from ia4ops_agent.main import app
@@ -603,6 +604,51 @@ async def test_health_returns_200(client: AsyncClient) -> None:
     resp = await client.get("/health")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
+
+
+async def test_request_interpretation_does_not_start_investigation(
+    client: AsyncClient,
+) -> None:
+    class FixedInterpreter:
+        async def interpret(
+            self,
+            message: str,
+            previous_message: str | None = None,
+        ) -> InvestigationInterpretation:
+            assert message == "Pourquoi checkout est lent ?"
+            assert previous_message is None
+            return InvestigationInterpretation(
+                status="ready",
+                service="checkout",
+                window_minutes=15,
+                question="Pourquoi checkout est lent ?",
+                clarification_question="",
+            )
+
+    app.state.request_interpreter = FixedInterpreter()
+    response = await client.post(
+        "/api/v1/investigations/interpret",
+        json={"message": "Pourquoi checkout est lent ?"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["service"] == "checkout"
+    assert response.json()["window_minutes"] == 15
+    assert app.state.incident_store == {}
+
+
+async def test_request_interpretation_returns_503_when_disabled(
+    client: AsyncClient,
+) -> None:
+    app.state.request_interpreter = None
+    response = await client.post(
+        "/api/v1/investigations/interpret",
+        json={"message": "Pourquoi checkout est lent ?"},
+    )
+
+    assert response.status_code == 503
+    assert "REQUEST_INTERPRETER_PROVIDER=gemini" in response.json()["detail"]
+    assert app.state.incident_store == {}
 
 
 async def test_chainlit_is_mounted_on_fastapi(client: AsyncClient) -> None:

@@ -2,7 +2,9 @@
 
 import pytest
 
+from ia4ops_agent.api.models import InvestigationRequest
 from ia4ops_agent.chat_app import (
+    format_investigation_confirmation,
     format_pending_alert,
     format_report,
     parse_investigation_message,
@@ -40,6 +42,21 @@ def test_parse_investigation_command_rejects_unbounded_or_incomplete_input(
 ) -> None:
     with pytest.raises(ValueError):
         parse_investigation_message(message)
+
+
+def test_investigation_confirmation_shows_parameters_before_starting() -> None:
+    content = format_investigation_confirmation(
+        InvestigationRequest(
+            service="checkout",
+            window_minutes=30,
+            question="Pourquoi les erreurs augmentent ?",
+        )
+    )
+
+    assert "checkout" in content
+    assert "30 minutes" in content
+    assert "Pourquoi les erreurs augmentent ?" in content
+    assert "Aucune collecte ni aucun diagnostic ne démarre avant votre confirmation" in content
 
 
 def test_mock_report_rendering_distinguishes_real_observations_from_mock_diagnosis() -> None:

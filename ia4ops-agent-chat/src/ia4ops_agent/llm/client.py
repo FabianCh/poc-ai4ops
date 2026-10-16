@@ -16,7 +16,6 @@ Retries :
 """
 
 import asyncio
-import json
 import logging
 import time
 from typing import Any
@@ -29,6 +28,7 @@ from ia4ops_agent.domain.diagnosis import DiagnosticOutput
 from ia4ops_agent.llm.interface import DiagnosisError
 from ia4ops_agent.llm.models import LLMCallSummary, LLMParseError
 from ia4ops_agent.llm.prompts import PROMPT_VERSION, SYSTEM_PROMPT, build_user_message
+from ia4ops_agent.llm.schema import clean_schema_for_vertex
 
 logger = logging.getLogger(__name__)
 
@@ -43,36 +43,8 @@ THINKING_BUDGET = 1024
 MAX_OUTPUT_TOKENS = 4096
 BACKOFF_BASE_SECONDS = 2.0
 
-# Mots-clés JSON Schema non supportés par Vertex AI structured output.
-# Ne jamais retirer : type, properties, required, enum, items, $defs, $ref
-_UNSUPPORTED_SCHEMA_FIELDS = frozenset({
-    "maxLength", "minLength",
-    "minItems", "maxItems",
-    "minimum", "maximum",
-    "exclusiveMinimum", "exclusiveMaximum",
-    "multipleOf",
-    "pattern",
-})
-
 # Codes d'erreur HTTP indiquant une erreur permanente (pas de retry)
 _PERMANENT_ERROR_CODES = frozenset({"404", "403", "400", "401"})
-
-
-def _clean_schema_for_vertex(schema: dict) -> dict:
-    """
-    Retire récursivement les mots-clés non supportés par Vertex AI.
-    Ne touche pas à type, properties, required, enum, items, $defs, $ref.
-    La validation Pydantic complète est réappliquée localement après désérialisation.
-    """
-    if isinstance(schema, dict):
-        return {
-            k: _clean_schema_for_vertex(v)
-            for k, v in schema.items()
-            if k not in _UNSUPPORTED_SCHEMA_FIELDS
-        }
-    if isinstance(schema, list):
-        return [_clean_schema_for_vertex(item) for item in schema]
-    return schema
 
 
 def _is_permanent_error(exc: Exception) -> bool:
@@ -116,7 +88,7 @@ class GeminiVertexClient:
 
         # Schéma nettoyé calculé une seule fois à l'init
         raw_schema = DiagnosticOutput.model_json_schema()
-        self._clean_schema = _clean_schema_for_vertex(raw_schema)
+        self._clean_schema = clean_schema_for_vertex(raw_schema)
 
         # vertexai=True → backend Vertex AI, pas Gemini Developer API
         # L'auth repose sur GOOGLE_APPLICATION_CREDENTIALS (ADC)
@@ -203,7 +175,7 @@ class GeminiVertexClient:
                 )
                 return output, summary
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 err = LLMParseError(
                     attempt=attempt,
                     error_type="timeout",

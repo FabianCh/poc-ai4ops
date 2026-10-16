@@ -4,12 +4,13 @@ import asyncio
 import re
 import time
 from typing import Any
+from uuid import uuid4
 
 import chainlit as cl
 import httpx
 from pydantic import ValidationError
 
-from ia4ops_agent.api.models import InvestigationRequest
+from ia4ops_agent.api.models import InvestigationInterpretation, InvestigationRequest
 from ia4ops_agent.config import settings
 
 _SERVICE_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$")
@@ -157,6 +158,17 @@ def format_report(report: dict[str, Any], llm_provider: str, data_provider: str)
     return "\n".join(lines)
 
 
+def format_investigation_confirmation(investigation: InvestigationRequest) -> str:
+    """Summarize interpreted parameters before requesting explicit operator approval."""
+    return (
+        "### Demande comprise — confirmation requise\n\n"
+        f"- **Service** : `{investigation.service}`\n"
+        f"- **Fenêtre** : {investigation.window_minutes} minutes\n"
+        f"- **Question** : {investigation.question}\n\n"
+        "Aucune collecte ni aucun diagnostic ne démarre avant votre confirmation."
+    )
+
+
 def format_pending_alert(alert: dict[str, Any]) -> str:
     """Présente le résumé Alertmanager avant toute collecte ou analyse."""
     services = ", ".join(alert.get("affected_services") or [alert.get("service", "unknown")])
@@ -263,6 +275,12 @@ async def _wait_for_alert_report(incident_id: str) -> dict[str, Any]:
 @cl.on_chat_start
 async def on_chat_start() -> None:
     cl.user_session.set("notified_alert_ids", set())
+    cl.user_session.set("pending_interpretation_message", None)
+    interpreter_mode = (
+        "désactivé ; la commande structurée reste disponible"
+        if settings.request_interpreter_provider == "disabled"
+        else f"Vertex AI ({settings.request_interpreter_model})"
+    )
     llm_mode = (
         "**LLM mock** : le diagnostic est préconfiguré et démonstratif."
         if settings.llm_provider == "mock"
@@ -281,10 +299,11 @@ async def on_chat_start() -> None:
             "en **lecture seule**.\n\n"
             "---\n\n"
             "#### Lancer une investigation\n"
-            "Saisissez une demande au format :\n\n"
-            "`/investigate <service> [minutes] | <question>`\n\n"
-            "> `/investigate product-catalog 15 | Pourquoi le taux d'erreur augmente ?`\n\n"
-            "Fenêtre : **1 à 60 minutes** · Namespace : `otel-demo`\n\n"
+            "Décrivez votre demande en langage naturel, par exemple :\n\n"
+            "> Pourquoi checkout génère des erreurs depuis une demi-heure ?\n\n"
+            "Je vous présenterai le service et la période compris, puis vous pourrez confirmer "
+            "ou annuler. La commande `/investigate <service> [minutes] | <question>` reste "
+            "disponible. Fenêtre : **1 à 60 minutes** · Namespace : `otel-demo`.\n\n"
             "---\n\n"
             "#### Comment ça fonctionne\n"
             "- Les alertes entrantes attendent votre décision : **Investiguer** ou **Ignorer**.\n"
@@ -292,6 +311,7 @@ async def on_chat_start() -> None:
             "- Les pistes de remédiation sont des suggestions ; "
             "**aucune action n'est exécutée**.\n\n"
             f"**Mode IA** · {llm_mode}\n\n"
+            f"**Interprétation du langage naturel** · {interpreter_mode}\n\n"
             f"**Sources** · {data_mode}"
         )
     ).send()
@@ -309,16 +329,139 @@ async def on_chat_end() -> None:
 
 @cl.on_message
 async def on_message(message: cl.Message) -> None:
-    try:
-        investigation = parse_investigation_message(message.content)
-    except ValueError as exc:
-        await cl.Message(content=f"Demande non valide : {exc}").send()
+    base_url = f"http://127.0.0.1:{settings.port}"
+    if message.content.strip().startswith("/investigate"):
+        cl.user_session.set("pending_interpretation_message", None)
+        try:
+            investigation = parse_investigation_message(message.content)
+        except ValueError as exc:
+            await cl.Message(content=f"Demande non valide : {exc}").send()
+            return
+        await _offer_investigation_confirmation(investigation)
         return
 
+    previous_message = cl.user_session.get("pending_interpretation_message")
+    try:
+        async with httpx.AsyncClient(base_url=base_url, timeout=25) as client:
+            response = await client.post(
+                "/api/v1/investigations/interpret",
+                json={
+                    "message": message.content,
+                    "previous_message": previous_message,
+                },
+            )
+            if response.status_code != 200:
+                await cl.Message(
+                    content=f"Impossible d'interpréter la demande : {_response_detail(response)}"
+                ).send()
+                return
+            raw_interpretation = response.json()
+    except httpx.RequestError as exc:
+        await cl.Message(content=f"API IA4Ops injoignable sur `{base_url}` : {exc}").send()
+        return
+
+    try:
+        interpretation = InvestigationInterpretation.model_validate(raw_interpretation)
+    except ValidationError as exc:
+        await cl.Message(
+            content=f"Réponse d'interprétation invalide ; aucune investigation lancée : {exc}"
+        ).send()
+        return
+
+    if interpretation.status == "needs_clarification":
+        context = (
+            f"{previous_message}\nPrécision de l'opérateur : {message.content}"
+            if previous_message
+            else message.content
+        )
+        if len(context) > 2000:
+            cl.user_session.set("pending_interpretation_message", None)
+            await cl.Message(
+                content="Le contexte est trop long. Reformulez votre demande en un seul message."
+            ).send()
+            return
+        cl.user_session.set("pending_interpretation_message", context)
+        await cl.Message(
+            content=(
+                f"{interpretation.clarification_question}\n\n"
+                "Aucune investigation n'a été lancée. Vous pouvez préciser votre demande."
+            )
+        ).send()
+        return
+
+    cl.user_session.set("pending_interpretation_message", None)
+    try:
+        investigation = InvestigationRequest(
+            service=interpretation.service,
+            window_minutes=interpretation.window_minutes,
+            question=interpretation.question,
+        )
+    except ValidationError as exc:
+        await cl.Message(
+            content=f"Paramètres interprétés invalides ; aucune investigation lancée : {exc}"
+        ).send()
+        return
+    await _offer_investigation_confirmation(investigation)
+
+
+async def _offer_investigation_confirmation(investigation: InvestigationRequest) -> None:
+    confirmation_id = uuid4().hex
+    cl.user_session.set(
+        "pending_investigation_confirmation",
+        {
+            "confirmation_id": confirmation_id,
+            "investigation": investigation.model_dump(),
+        },
+    )
+    actions = [
+        cl.Action(
+            name="confirm_investigation",
+            payload={"confirmation_id": confirmation_id},
+            label="Confirmer et investiguer",
+            icon="search",
+        ),
+        cl.Action(
+            name="cancel_investigation",
+            payload={"confirmation_id": confirmation_id},
+            label="Annuler",
+            icon="x",
+        ),
+    ]
+    await cl.Message(
+        content=format_investigation_confirmation(investigation),
+        actions=actions,
+    ).send()
+
+
+@cl.action_callback("confirm_investigation")
+async def confirm_investigation(action: cl.Action) -> None:
+    pending = cl.user_session.get("pending_investigation_confirmation")
+    confirmation_id = action.payload.get("confirmation_id")
+    if (
+        not isinstance(pending, dict)
+        or not isinstance(confirmation_id, str)
+        or pending.get("confirmation_id") != confirmation_id
+    ):
+        await action.remove()
+        await cl.Message(
+            content="Cette confirmation est expirée ou a déjà été utilisée."
+        ).send()
+        return
+    cl.user_session.set("pending_investigation_confirmation", None)
+
+    try:
+        investigation = InvestigationRequest.model_validate(pending.get("investigation"))
+    except ValidationError as exc:
+        await cl.Message(
+            content=f"Confirmation invalide ; aucune investigation lancée : {exc}"
+        ).send()
+        await action.remove()
+        return
+
+    await action.remove()
     progress = cl.Message(content=f"Investigation de `{investigation.service}` en cours…")
     await progress.send()
     base_url = f"http://127.0.0.1:{settings.port}"
-
     try:
         async with httpx.AsyncClient(base_url=base_url, timeout=15) as client:
             accepted_response = await client.post(
@@ -326,8 +469,10 @@ async def on_message(message: cl.Message) -> None:
                 json=investigation.model_dump(),
             )
             if accepted_response.status_code != 202:
-                detail = _response_detail(accepted_response)
-                progress.content = f"Impossible de démarrer l'investigation : {detail}"
+                progress.content = (
+                    "Impossible de démarrer l'investigation : "
+                    f"{_response_detail(accepted_response)}"
+                )
                 await progress.update()
                 return
 
@@ -342,7 +487,6 @@ async def on_message(message: cl.Message) -> None:
                     )
                     await progress.update()
                     return
-
                 incident = response.json()
                 if incident["status"] in {"completed", "completed_with_errors"}:
                     progress.content = format_report(
@@ -369,6 +513,25 @@ async def on_message(message: cl.Message) -> None:
     except httpx.RequestError as exc:
         progress.content = f"API IA4Ops injoignable sur `{base_url}` : {exc}"
         await progress.update()
+
+
+@cl.action_callback("cancel_investigation")
+async def cancel_investigation(action: cl.Action) -> None:
+    pending = cl.user_session.get("pending_investigation_confirmation")
+    confirmation_id = action.payload.get("confirmation_id")
+    if (
+        not isinstance(pending, dict)
+        or not isinstance(confirmation_id, str)
+        or pending.get("confirmation_id") != confirmation_id
+    ):
+        await action.remove()
+        await cl.Message(
+            content="Cette confirmation est expirée ou a déjà été utilisée."
+        ).send()
+        return
+    cl.user_session.set("pending_investigation_confirmation", None)
+    await action.remove()
+    await cl.Message(content="Investigation annulée ; aucune collecte n'a été lancée.").send()
 
 
 @cl.action_callback("investigate_alert")

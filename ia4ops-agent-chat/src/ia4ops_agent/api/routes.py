@@ -45,16 +45,46 @@ from ia4ops_agent.api.models import (
     AlertWebhookRequest,
     IncidentResponse,
     InvestigationAccepted,
+    InvestigationInterpretation,
+    InvestigationInterpretationRequest,
     InvestigationRequest,
     PendingAlert,
 )
 from ia4ops_agent.audit.trace_logging import emit_trace_event
 from ia4ops_agent.integrations.keep import KeepAPIError
 from ia4ops_agent.integrations.keep_publisher import KeepPublisher
+from ia4ops_agent.llm.request_interpreter import RequestInterpretationError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.post(
+    "/api/v1/investigations/interpret",
+    response_model=InvestigationInterpretation,
+    summary="Interpréter une demande sans démarrer d'investigation",
+    tags=["incidents"],
+)
+async def interpret_investigation_request(
+    payload: InvestigationInterpretationRequest,
+    request: Request,
+) -> InvestigationInterpretation:
+    """Extract bounded parameters; the operator must confirm separately."""
+    interpreter = getattr(request.app.state, "request_interpreter", None)
+    if interpreter is None:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "L'interpréteur de langage naturel est désactivé. "
+                "Configurez REQUEST_INTERPRETER_PROVIDER=gemini."
+            ),
+        )
+    try:
+        return await interpreter.interpret(payload.message, payload.previous_message)
+    except RequestInterpretationError as exc:
+        logger.warning("Impossible d'interpréter la demande opérateur: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 # ---------------------------------------------------------------------------
