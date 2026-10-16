@@ -59,6 +59,37 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+_GRAPH_PROGRESS = {
+    "initialize": ("Préparation de l'investigation", "collect_metrics"),
+    "collect_metrics": ("Collecte des métriques", "collect_traces"),
+    "collect_traces": ("Collecte des traces", "collect_logs"),
+    "collect_logs": ("Collecte des logs", "collect_cluster"),
+    "collect_cluster": ("Vérification de l'état du cluster", "build_context"),
+    "build_context": ("Synthèse des observations", "diagnose"),
+    "diagnose": ("Analyse du diagnostic", "validate"),
+    "validate": ("Validation des preuves et garde-fous", "finalize"),
+    "finalize": ("Finalisation du rapport", None),
+    "end_watchdog": ("Fin du traitement", None),
+}
+_GRAPH_PROGRESS_LABELS = {node: label for node, (label, _) in _GRAPH_PROGRESS.items()}
+
+
+def _record_graph_progress(store: dict, incident_id: str, completed_node: str) -> None:
+    """Record completed graph steps and expose the next actual step to API clients."""
+    progress = _GRAPH_PROGRESS.get(completed_node)
+    entry = store.get(incident_id)
+    if progress is None or entry is None:
+        return
+
+    completed_label, next_node = progress
+    completed_steps = list(entry.get("completed_steps", []))
+    if completed_label not in completed_steps:
+        completed_steps.append(completed_label)
+    entry["completed_steps"] = completed_steps
+    entry["progress"] = (
+        _GRAPH_PROGRESS_LABELS[next_node] if next_node is not None else completed_label
+    )
+
 
 @router.post(
     "/api/v1/investigations/interpret",
@@ -485,6 +516,8 @@ async def _run_graph(
     # Marquer comme "running"
     if incident_id in store:
         store[incident_id]["status"] = "running"
+        store[incident_id]["progress"] = _GRAPH_PROGRESS_LABELS["initialize"]
+        store[incident_id]["completed_steps"] = []
 
     try:
         graph = app_state.graph
@@ -497,7 +530,12 @@ async def _run_graph(
             initial_state["investigation_question"] = investigation_question
 
         logger.debug("Démarrage du graphe pour incident_id=%s", incident_id)
-        final_state = await graph.ainvoke(initial_state)
+        final_state = initial_state.copy()
+        async for updates in graph.astream(initial_state, stream_mode="updates"):
+            for node_name, node_update in updates.items():
+                if isinstance(node_update, dict):
+                    final_state.update(node_update)
+                _record_graph_progress(store, incident_id, node_name)
 
         report = final_state.get("report", {})
         # Récupérer l'incident_id définitif généré par le nœud initialize
@@ -517,6 +555,8 @@ async def _run_graph(
             "finalized_at": finalized_at,
             "report": report,
             "failure": None,
+            "progress": "Rapport prêt",
+            "completed_steps": store.get(incident_id, {}).get("completed_steps", []),
         }
 
         # Si l'incident_id a changé, migrer l'entrée dans le store
@@ -580,6 +620,7 @@ async def _run_graph(
                 **store[incident_id],
                 "status": "failed",
                 "failure": str(exc),
+                "progress": "Échec de l'investigation",
             }
 
 

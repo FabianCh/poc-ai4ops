@@ -216,6 +216,8 @@ class IncidentResponse(BaseModel):
     ]
     received_at: str | None = None
     alert_status: Literal["firing", "resolved"] | None = None
+    progress: str | None = None
+    completed_steps: list[str] = Field(default_factory=list)
     resolved_at: str | None = None
     # Rapport final (présent quand status = completed*)
     report: dict | None = None

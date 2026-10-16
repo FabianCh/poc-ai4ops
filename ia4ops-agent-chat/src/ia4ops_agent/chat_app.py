@@ -169,6 +169,23 @@ def format_investigation_confirmation(investigation: InvestigationRequest) -> st
     )
 
 
+def format_investigation_progress(
+    service: str,
+    current_step: str,
+    completed_steps: list[str],
+) -> str:
+    """Render workflow progress from completed graph nodes."""
+    lines = [
+        f"Investigation de `{service}` en cours…",
+        "",
+        f"🔄 **{current_step or 'Préparation de l’investigation'}**",
+    ]
+    if completed_steps:
+        lines.extend(["", "Étapes terminées :"])
+        lines.extend(f"✅ {step}" for step in completed_steps)
+    return "\n".join(lines)
+
+
 def format_pending_alert(alert: dict[str, Any]) -> str:
     """Présente le résumé Alertmanager avant toute collecte ou analyse."""
     services = ", ".join(alert.get("affected_services") or [alert.get("service", "unknown")])
@@ -478,6 +495,7 @@ async def confirm_investigation(action: cl.Action) -> None:
 
             incident_id = accepted_response.json()["incident_id"]
             deadline = time.monotonic() + _POLL_TIMEOUT_SECONDS
+            last_progress: tuple[str, tuple[str, ...]] | None = None
             while time.monotonic() < deadline:
                 response = await client.get(f"/api/v1/incidents/{incident_id}")
                 if response.status_code != 200:
@@ -488,6 +506,18 @@ async def confirm_investigation(action: cl.Action) -> None:
                     await progress.update()
                     return
                 incident = response.json()
+                if incident["status"] in {"pending", "running"}:
+                    current_step = incident.get("progress") or ""
+                    completed_steps = tuple(incident.get("completed_steps") or [])
+                    progress_state = (current_step, completed_steps)
+                    if progress_state != last_progress:
+                        progress.content = format_investigation_progress(
+                            investigation.service,
+                            current_step,
+                            list(completed_steps),
+                        )
+                        await progress.update()
+                        last_progress = progress_state
                 if incident["status"] in {"completed", "completed_with_errors"}:
                     progress.content = format_report(
                         incident.get("report") or {},

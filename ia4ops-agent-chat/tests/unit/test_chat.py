@@ -5,6 +5,7 @@ import pytest
 from ia4ops_agent.api.models import InvestigationRequest
 from ia4ops_agent.chat_app import (
     format_investigation_confirmation,
+    format_investigation_progress,
     format_pending_alert,
     format_report,
     parse_investigation_message,
@@ -57,6 +58,19 @@ def test_investigation_confirmation_shows_parameters_before_starting() -> None:
     assert "30 minutes" in content
     assert "Pourquoi les erreurs augmentent ?" in content
     assert "Aucune collecte ni aucun diagnostic ne démarre avant votre confirmation" in content
+
+
+def test_investigation_progress_shows_active_and_completed_steps() -> None:
+    content = format_investigation_progress(
+        "checkout",
+        "Collecte des traces",
+        ["Préparation de l'investigation", "Collecte des métriques"],
+    )
+
+    assert "Investigation de `checkout` en cours" in content
+    assert "🔄 **Collecte des traces**" in content
+    assert "✅ Préparation de l'investigation" in content
+    assert "✅ Collecte des métriques" in content
 
 
 def test_mock_report_rendering_distinguishes_real_observations_from_mock_diagnosis() -> None:

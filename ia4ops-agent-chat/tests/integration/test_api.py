@@ -27,6 +27,7 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from ia4ops_agent.api.models import InvestigationInterpretation
+from ia4ops_agent.api.routes import _run_graph
 from ia4ops_agent.config import settings
 from ia4ops_agent.integrations.keep import KeepAPIError
 from ia4ops_agent.main import app
@@ -692,6 +693,66 @@ async def test_manual_investigation_runs_graph_with_requested_window(
     assert context["observations"]["metrics"]["window_minutes"] == 7
     assert context["observations"]["logs"]["window_minutes"] == 7
     assert publisher.published is False
+
+
+async def test_graph_progress_is_exposed_while_workflow_is_running(
+    client: AsyncClient,
+) -> None:
+    entered_graph_step = asyncio.Event()
+    continue_graph = asyncio.Event()
+
+    class SlowGraph:
+        async def astream(self, initial_state: dict[str, Any], *, stream_mode: str):
+            assert stream_mode == "updates"
+            assert initial_state["incident_id"] == "inc-progress"
+            yield {"initialize": {}}
+            entered_graph_step.set()
+            await continue_graph.wait()
+            yield {"collect_metrics": {}}
+            yield {
+                "finalize": {
+                    "report": {
+                        "incident_id": "inc-progress",
+                        "status": "completed",
+                        "finalized_at": None,
+                    }
+                }
+            }
+
+    app.state.graph = SlowGraph()
+    app.state.incident_store["inc-progress"] = {
+        "incident_id": "inc-progress",
+        "status": "pending",
+        "received_at": None,
+        "alert_status": "firing",
+        "dedup_key": None,
+        "resolved_at": None,
+        "report": None,
+        "failure": None,
+    }
+    task = asyncio.create_task(
+        _run_graph(
+            app_state=app.state,
+            incident_id="inc-progress",
+            payload_dict={},
+        )
+    )
+    try:
+        await asyncio.wait_for(entered_graph_step.wait(), timeout=1)
+        response = await client.get("/api/v1/incidents/inc-progress")
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "running"
+        assert response.json()["progress"] == "Collecte des métriques"
+        assert response.json()["completed_steps"] == ["Préparation de l'investigation"]
+    finally:
+        continue_graph.set()
+        await task
+
+    final_response = await client.get("/api/v1/incidents/inc-progress")
+    assert final_response.json()["status"] == "completed"
+    assert final_response.json()["progress"] == "Rapport prêt"
+    assert "Collecte des métriques" in final_response.json()["completed_steps"]
 
 
 @pytest.mark.parametrize(

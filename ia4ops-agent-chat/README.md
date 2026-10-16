@@ -84,7 +84,8 @@ défaut `disabled` évite tout appel LLM additionnel. Pour activer l'interpréta
 configurer `REQUEST_INTERPRETER_PROVIDER=gemini` et renseigner les variables Vertex AI/GCP. Le
 diagnostic reste en mock si `LLM_PROVIDER=mock`. L'API `POST /api/v1/investigations/interpret`
 ne fait qu'interpréter ; seul `POST /api/v1/investigations`, appelé après confirmation opérateur,
-démarre le graphe.
+démarre le graphe. Pendant son exécution, l'IHM affiche les étapes du workflow réellement terminées
+et l'étape en cours ; le rapport de diagnostic complet apparaît après la validation finale.
 
 `LLM_PROVIDER=mock` est le défaut pour le **diagnostic** et n'appelle pas Vertex AI. Si
 `REQUEST_INTERPRETER_PROVIDER=gemini`, Vertex AI est appelé uniquement pour interpréter chaque
