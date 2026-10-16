@@ -17,9 +17,9 @@ n'est créé.
   traité par la même validation, déduplication et attente d'approbation que les alertes réelles.
 - Les événements d'audit sont stockés sur un PVC local-path ; l'état des alertes en attente reste
   en mémoire et est perdu si le pod redémarre.
-- Le répertoire interne Chainlit `/app/.files` est monté sur un `emptyDir` inscriptible, requis
-  même lorsque l'IHM n'active pas l'upload de fichiers ; son contenu temporaire disparaît au
-  redémarrage du pod.
+- Les répertoires internes Chainlit `/app/.files` et `/app/.chainlit` sont montés sur des
+  `emptyDir` inscriptibles, requis même lorsque l'IHM n'active pas l'upload de fichiers ; leur
+  contenu temporaire disparaît au redémarrage du pod.
 
 Pour activer l'interpréteur naturel et les providers réels dans le cluster, il faudra provisionner
 les Secrets hors Git, configurer les sorties réseau nécessaires vers Vertex AI et Grafana, puis
