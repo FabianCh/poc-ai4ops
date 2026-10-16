@@ -29,11 +29,37 @@ spec:
         imagePullPolicy: Always
         env:
         - name: LLM_PROVIDER
-          value: mock
+          value: gemini
         - name: REQUEST_INTERPRETER_PROVIDER
-          value: disabled
+          value: gemini
+        - name: REQUEST_INTERPRETER_MODEL
+          value: gemini-2.5-flash
         - name: DATA_PROVIDER
-          value: mock
+          value: real
+        - name: LLM_MODEL
+          value: gemini-2.5-flash
+        - name: GOOGLE_GENAI_USE_VERTEXAI
+          value: "true"
+        - name: GOOGLE_CLOUD_PROJECT
+          value: wavestone-cto-ai4ops
+        - name: GOOGLE_CLOUD_LOCATION
+          value: europe-west1
+        - name: VERTEX_AI_LOCATION
+          value: europe-west1
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: /var/run/secrets/google/credentials.json
+        - name: GRAFANA_BASE_URL
+          value: https://grafana.34.140.119.20.sslip.io
+        - name: GRAFANA_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: grafana-credentials
+              key: username
+        - name: GRAFANA_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: grafana-credentials
+              key: password
         - name: AUDIT_DIR
           value: /app/audit_logs
         - name: HOME
@@ -72,6 +98,9 @@ spec:
           mountPath: /app/.files
         - name: chainlit-translations
           mountPath: /app/.chainlit/translations
+        - name: gemini-credentials
+          mountPath: /var/run/secrets/google
+          readOnly: true
         - name: tmp
           mountPath: /tmp
       volumes:
@@ -82,5 +111,11 @@ spec:
         emptyDir: {}
       - name: chainlit-translations
         emptyDir: {}
+      - name: gemini-credentials
+        secret:
+          secretName: ia4ops-agent-chat-gemini
+          items:
+          - key: credentials.json
+            path: credentials.json
       - name: tmp
         emptyDir: {}

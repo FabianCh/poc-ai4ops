@@ -6,10 +6,10 @@ n'est créé.
 
 ## Profil initial
 
-- `LLM_PROVIDER=mock` : le diagnostic ne fait aucun appel Gemini.
-- `DATA_PROVIDER=mock` : les observations sont synthétiques.
-- `REQUEST_INTERPRETER_PROVIDER=disabled` : pas d'appel Vertex AI ; utiliser la commande
-  `/investigate <service> [minutes] | <question>`.
+- `LLM_PROVIDER=gemini` et `REQUEST_INTERPRETER_PROVIDER=gemini` : diagnostic et interprétation
+  en langage naturel via Vertex AI (`gemini-2.5-flash`).
+- `DATA_PROVIDER=real` : métriques Prometheus, logs Loki et traces Jaeger via les proxies Grafana.
+  Le provider Kubernetes demeure non implémenté et signalera la source indisponible.
 - Le webhook Alertmanager est routé en parallèle à l'agent stable. Les alertes du namespace
   `otel-demo` restent en attente et n'exécutent aucun diagnostic avant confirmation opérateur.
 - Un webhook synthétique peut aussi être envoyé manuellement à
@@ -21,11 +21,44 @@ n'est créé.
   dans l'image runtime. `/app/.files` et `/app/.chainlit/translations` sont montés sur des
   `emptyDir` inscriptibles : Chainlit exige leur écriture au démarrage même si l'IHM n'active pas
   l'upload de fichiers. Leur contenu temporaire disparaît au redémarrage du pod.
+- Le LLM appelle Vertex AI et peut générer des coûts. Le compte de service GCP doit être autorisé
+  à utiliser Vertex AI dans `wavestone-cto-ai4ops`.
 
-Pour activer l'interpréteur naturel et les providers réels dans le cluster, il faudra provisionner
-les Secrets hors Git, configurer les sorties réseau nécessaires vers Vertex AI et Grafana, puis
-réviser la politique egress restrictive. Ne pas exposer d'Ingress tant que l'authentification n'est
-pas implémentée et validée.
+Le Deployment nécessite deux Secrets créés hors Git dans le namespace `ia4ops-agent-chat` avant
+son démarrage en mode réel.
+
+1. Créer une clé JSON d'un compte de service dédié, avec le rôle minimal `roles/aiplatform.user`
+   dans le projet `wavestone-cto-ai4ops`, après avoir vérifié que l'API Vertex AI est activée.
+   Copier le fichier de façon sécurisée vers Cloud Shell, puis créer le Secret sans afficher ni
+   committer le contenu :
+
+   ```bash
+   kubectl -n ia4ops-agent-chat create secret generic ia4ops-agent-chat-gemini \
+     --from-file=credentials.json="$HOME/credentials/ia4ops-agent-chat.json"
+   ```
+
+   Le conteneur monte cette clé en lecture seule et utilise ADC via
+   `GOOGLE_APPLICATION_CREDENTIALS`. Ne jamais coller son contenu dans le chat ni l'ajouter au dépôt.
+
+2. Copier dans le namespace chatbot le Secret Grafana déjà utilisé par l'agent stable. Le pipeline
+   transmet le document directement à l'API Kubernetes sans afficher les valeurs :
+
+   ```bash
+   kubectl -n ia4ops get secret grafana-credentials -o json \
+     | jq 'del(.metadata.uid,.metadata.resourceVersion,.metadata.creationTimestamp,.metadata.managedFields) | .metadata.namespace="ia4ops-agent-chat"' \
+     | kubectl apply -f -
+   ```
+
+3. Vérifier que les deux Secrets sont présents sans afficher leur contenu :
+
+   ```bash
+   kubectl -n ia4ops-agent-chat get secret ia4ops-agent-chat-gemini grafana-credentials
+   ```
+
+La NetworkPolicy autorise DNS et HTTPS sortant (TCP 443) vers Vertex AI et Grafana. Les NetworkPolicy
+Kubernetes standard ne pouvant pas borner les destinations par nom DNS, cette règle autorise HTTPS
+vers toute destination depuis ce seul pod. Ne pas exposer d'Ingress tant que l'authentification
+n'est pas implémentée et validée.
 
 ## Publication et activation
 
@@ -38,7 +71,7 @@ pas implémentée et validée.
 3. Le manifeste utilise `latest` pour le premier démarrage et `imagePullPolicy: Always`. Après le
    premier build, préférer le tag immuable `sha-<7 caractères>` affiché par Actions et mettre à jour
    `newTag` dans `manifest/applications/ia4ops-agent-chat/kustomization.yaml`.
-4. Attendre la réconciliation Flux :
+4. Attendre la réconciliation Flux (après création des Secrets requis) :
 
    ```bash
    flux get kustomizations

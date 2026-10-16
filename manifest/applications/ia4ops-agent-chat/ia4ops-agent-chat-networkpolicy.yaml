@@ -43,7 +43,8 @@ spec:
   policyTypes:
   - Egress
 ---
-# DNS suffit au profil de déploiement mock ; pas de sortie vers Internet ou Grafana.
+# Autoriser le DNS du cluster ; les appels HTTPS vers Grafana et Vertex AI sont listés
+# séparément ci-dessous.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -68,3 +69,21 @@ spec:
       port: 53
     - protocol: TCP
       port: 53
+---
+# Les endpoints Google Vertex AI et Grafana sont externes. NetworkPolicy standard ne gère pas
+# les FQDN : l'egress est limité à HTTPS (et DNS ci-dessus), sans accès HTTP arbitraire.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-https-egress
+  namespace: ia4ops-agent-chat
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ia4ops-agent-chat
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - protocol: TCP
+      port: 443
