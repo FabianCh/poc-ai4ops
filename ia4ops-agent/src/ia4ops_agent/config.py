@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     grafana_username: str = Field(default="admin", alias="GRAFANA_USERNAME")
     grafana_password: str | None = Field(default=None, alias="GRAFANA_PASSWORD")
 
+    # --- API Kubernetes (lecture seule, namespaces autorisés séparés par des virgules) ---
+    kubernetes_namespaces: str = Field(default="otel-demo", alias="KUBERNETES_NAMESPACES")
+
     # --- Keep API (préparation du retour agent -> Keep) ---
     keep_api_base_url: str | None = Field(default=None, alias="KEEP_API_BASE_URL")
     keep_api_key: str | None = Field(default=None, alias="KEEP_API_KEY")

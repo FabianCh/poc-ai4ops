@@ -69,6 +69,11 @@ cette panne sont émises dans un autre service ou une autre source.
   `product-catalog`, cette correspondance a été confirmée dans Prometheus et Loki.
 - La sélection Prometheus ne filtre pas sur le namespace, car la règle spanmetrics de la
   plateforme utilise `service_name` sans matcher namespace.
-- Le `KubernetesProvider` n'est pas implémenté et signale la source comme indisponible.
+- Le `KubernetesProvider` lit l'API Kubernetes in-cluster avec le jeton du ServiceAccount
+  (`/var/run/secrets/kubernetes.io/serviceaccount`), en `GET` uniquement, limité aux namespaces de
+  `KUBERNETES_NAMESPACES` (défaut `otel-demo`). Le Role ne donne que `get`/`list` sur pods, events,
+  deployments et replicasets : ni logs de pods, ni secrets. Les pods sont trouvés par le
+  `spec.selector.matchLabels` du Deployment. Sans jeton, sans droit (403) ou hors liste blanche, la
+  source est `unavailable` et le diagnostic continue.
   `DATA_PROVIDER=real` utilise donc Prometheus et Loki réels sans injecter de données
   Kubernetes simulées.

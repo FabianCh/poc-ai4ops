@@ -96,7 +96,7 @@ Voir `docs/architecture.md` pour le diagramme complet.
 
 ### Sources du contexte de diagnostic
 
-Toutes les sources passent par le proxy Grafana (mêmes identifiants, aucun droit Kubernetes).
+Métriques, traces et logs passent par le proxy Grafana (mêmes identifiants). L'état Kubernetes est lu en lecture seule via le ServiceAccount de l'agent, limité au namespace `otel-demo` (`get`/`list` sur pods, events, deployments, replicasets).
 Chaque source est non bloquante : en cas d'échec, elle passe `unavailable` et figure dans
 `known_missing`. Le contexte transmis à Gemini est borné.
 
@@ -106,7 +106,7 @@ Chaque source est non bloquante : en cas d'échec, elle passe `unavailable` et f
 | Prometheus | taux d'erreur, p95, débit (spanmetrics) ; mémoire (ratio par pod, octets), CPU (cœurs), redémarrages et OOMKilled sur 10 min |
 | Jaeger | nombre de traces en erreur, top 5 spans en erreur (service, opération, message tronqué à 200 car., codes de statut), chaîne de services, ≤ 3 identifiants de trace |
 | Loki | lignes error/warn du service, lignes dont le contenu évoque une panne (même en INFO), lignes error/warn des traces en erreur (tous services) ; top 5 motifs |
-| Kubernetes | non disponible (provider réel hors périmètre) |
+| Kubernetes | pods (phase, readiness, redémarrages, raison d'attente/terminaison), réplicas, événements `Warning` ; `unavailable` si le jeton ou le RBAC manque |
 
 Les annotations, messages de traces et logs sont des données non fiables : le prompt système
 interdit de suivre toute instruction qui s'y trouve, et seuls des champs d'une liste blanche sont
@@ -117,7 +117,7 @@ copiés depuis Jaeger.
 | Variable | Défaut | Description |
 |---|---|---|
 | `LLM_PROVIDER` | `mock` | `mock` ou `gemini` |
-| `DATA_PROVIDER` | `mock` | `mock` ou `real` pour métriques et logs ; le provider Kubernetes réel reste incomplet |
+| `DATA_PROVIDER` | `mock` | `mock` ou `real` pour métriques et logs  ; Kubernetes réel : API in-cluster en lecture seule |
 | `GOOGLE_APPLICATION_CREDENTIALS` | — | Chemin vers le service account JSON GCP |
 | `GOOGLE_CLOUD_PROJECT` | — | ID du projet GCP |
 | `VERTEX_AI_LOCATION` | `europe-west1` | Région Vertex AI |
@@ -184,7 +184,7 @@ déployés par Flux dans le namespace `ia4ops` :
 - `Deployment` 1 réplica ; le manifeste de test configure `LLM_PROVIDER=gemini` et
   `DATA_PROVIDER=real` (le comportement Gemini + providers réels via webhook reste à valider),
   non-root,
-  système de fichiers en lecture seule, sans token d'API Kubernetes ; audit trail sur un PVC de 1 Gi ;
+  système de fichiers en lecture seule, jeton de ServiceAccount limité à la lecture de `otel-demo` ; audit trail sur un PVC de 1 Gi ;
 - `Service` ClusterIP `ia4ops-agent.ia4ops.svc:8000`, sans exposition publique ;
 - `NetworkPolicy` : tout trafic entrant refusé, sauf depuis les pods Alertmanager du namespace
   `monitoring` (seule source prévue par le cadrage) ;
@@ -262,6 +262,6 @@ Pour connecter l'agent au cluster GCP de Fabian :
 3. Basculer `LLM_PROVIDER=gemini` et fournir `GOOGLE_APPLICATION_CREDENTIALS`
 4. Garder `DATA_PROVIDER=mock` pour utiliser Gemini avec les données simulées. Les providers
    Prometheus et Loki sont sélectionnables indépendamment avec `DATA_PROVIDER=real` après
-   configuration de Grafana ; le provider Kubernetes réel reste incomplet.
+   configuration de Grafana .
 
 Voir `providers/real/README.md` pour le détail des variables et des endpoints attendus.
