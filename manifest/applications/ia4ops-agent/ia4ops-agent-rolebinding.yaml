@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ia4ops-agent-reader
+  namespace: otel-demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ia4ops-agent-reader
+subjects:
+- kind: ServiceAccount
+  name: ia4ops-agent
+  namespace: ia4ops

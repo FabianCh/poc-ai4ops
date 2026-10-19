@@ -1,7 +1,8 @@
 ---
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: ia4ops
+# Pas de `namespace:` global : le Role et le RoleBinding vivent dans otel-demo ; chaque
+# ressource déclare son namespace.
 images:
 # Tag figé (sha du commit) : mettre à jour après chaque build de la CI ia4ops-agent
 - name: ghcr.io/fabianch/poc-ai4ops/ia4ops-agent
@@ -16,6 +17,9 @@ labels:
     app.kubernetes.io/instance: ia4ops-agent
 resources:
 - ia4ops-agent-namespace.yaml
+- ia4ops-agent-serviceaccount.yaml
+- ia4ops-agent-role.yaml
+- ia4ops-agent-rolebinding.yaml
 - ia4ops-agent-pvc.yaml
 - ia4ops-agent-deployment.yaml
 - ia4ops-agent-service.yaml

@@ -5,6 +5,9 @@ metadata:
   name: ia4ops-agent
   namespace: flux-system
 spec:
+  # Le Role de lecture est créé dans otel-demo : le namespace doit exister
+  dependsOn:
+  - name: otel-demo
   interval: 10m0s
   path: ./manifest/applications/ia4ops-agent
   prune: true
@@ -13,4 +16,3 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
-  targetNamespace: ia4ops

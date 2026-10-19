@@ -19,8 +19,10 @@ spec:
       labels:
         app.kubernetes.io/name: ia4ops-agent
     spec:
-      # Les données sont collectées via Grafana ; aucun accès à l'API Kubernetes nécessaire.
-      automountServiceAccountToken: false
+      # Métriques, traces et logs passent par Grafana ; le jeton du ServiceAccount ne sert qu'à
+      # lire (get/list) pods, events, deployments et replicasets du namespace otel-demo.
+      serviceAccountName: ia4ops-agent
+      automountServiceAccountToken: true
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -60,6 +62,9 @@ spec:
               name: ia4ops-agent-keep
               key: KEEP_API_KEY
               optional: true
+        # Liste blanche des namespaces lisibles via l'API Kubernetes
+        - name: KUBERNETES_NAMESPACES
+          value: otel-demo
         - name: AUDIT_DIR
           value: /app/audit_logs
         # Racine en lecture seule et utilisateur sans home : caches éventuels dans /tmp
