@@ -18,7 +18,7 @@ class Evidence(BaseModel):
     Doit être traçable jusqu'aux données d'entrée collectées.
     """
 
-    source: Literal["alert", "metrics", "logs", "kubernetes", "changes"]
+    source: Literal["alert", "metrics", "traces", "logs", "kubernetes", "changes"]
     reference: str = Field(
         ...,
         description="Identifiant ou clé permettant de retrouver l'observation dans le contexte.",
