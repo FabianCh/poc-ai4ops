@@ -87,3 +87,22 @@ spec:
   - ports:
     - protocol: TCP
       port: 443
+---
+# Lecture de l'API Kubernetes (k3s écoute sur 6443 ; la politique est évaluée après la
+# traduction du Service kubernetes.default vers l'IP du nœud). Limité à ce port : les droits
+# effectifs sont ceux, en lecture seule, du Role ia4ops-agent-chat-reader dans otel-demo.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kubernetes-api-egress
+  namespace: ia4ops-agent-chat
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ia4ops-agent-chat
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - protocol: TCP
+      port: 6443

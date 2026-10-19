@@ -15,7 +15,10 @@ spec:
       labels:
         app.kubernetes.io/name: ia4ops-agent-chat
     spec:
-      automountServiceAccountToken: false
+      # Le jeton du ServiceAccount ne sert qu'à lire (get/list) pods, events, deployments et
+      # replicasets du namespace otel-demo.
+      serviceAccountName: ia4ops-agent-chat
+      automountServiceAccountToken: true
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -60,6 +63,9 @@ spec:
             secretKeyRef:
               name: grafana-credentials
               key: password
+        # Liste blanche des namespaces lisibles via l'API Kubernetes
+        - name: KUBERNETES_NAMESPACES
+          value: otel-demo
         - name: AUDIT_DIR
           value: /app/audit_logs
         - name: HOME

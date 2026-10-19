@@ -1,6 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: ia4ops-agent-chat
+# Pas de `namespace:` global : le Role et le RoleBinding vivent dans otel-demo ; chaque
+# ressource déclare son namespace.
 images:
 - name: ghcr.io/fabianch/poc-ai4ops/ia4ops-agent-chat
   newTag: latest
@@ -12,6 +13,9 @@ labels:
     app.kubernetes.io/instance: ia4ops-agent-chat
 resources:
 - ia4ops-agent-chat-namespace.yaml
+- ia4ops-agent-chat-serviceaccount.yaml
+- ia4ops-agent-chat-role.yaml
+- ia4ops-agent-chat-rolebinding.yaml
 - ia4ops-agent-chat-pvc.yaml
 - ia4ops-agent-chat-deployment.yaml
 - ia4ops-agent-chat-service.yaml
