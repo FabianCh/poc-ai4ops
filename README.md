@@ -57,6 +57,7 @@ certificat Let's Encrypt automatiquement.
 | [`GUIDE-DIRECTION-ARTISTIQUE-IHM.md`](GUIDE-DIRECTION-ARTISTIQUE-IHM.md) | Guide visuel Wavestone pour l'IHM IA4Ops/Chainlit |
 | [`bin/`](bin/) | Kubeconfig, upgrade Flux, validation des manifests |
 | [`docs/`](docs/) | Endpoints, accès depuis Cloud Shell, coûts |
+| [`documentation/`](documentation/) | Base de connaissance IA4Ops : plans, journal d'avancement, contrat webhook, architecture |
 | `Makefile` | Raccourcis (`make help`) |
 
 ## Documentation
@@ -67,6 +68,7 @@ certificat Let's Encrypt automatiquement.
 | [docs/cloudshell.md](docs/cloudshell.md) | Récupérer URLs, mot de passe Grafana et kubeconfig depuis Cloud Shell |
 | [docs/couts.md](docs/couts.md) | Coût de la VM 24/7, à la journée, arrêtée ; recommandations |
 | [GUIDE-DIRECTION-ARTISTIQUE-IHM.md](GUIDE-DIRECTION-ARTISTIQUE-IHM.md) | Principes visuels, couleurs, composants et accessibilité de l'IHM Chainlit |
+| [documentation/README.md](documentation/README.md) | Index de la base de connaissance IA4Ops (plans, suivi, contrats, architecture) |
 
 ## Tester le POC
 

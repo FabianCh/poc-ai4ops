@@ -1,7 +1,7 @@
 ﻿"""
 Modèles de domaine pour la réception des alertes Alertmanager v4.
 
-Format de référence : contrat webhook Alertmanager v4 (ia4ops-webhook-contract.md).
+Format de référence : contrat webhook Alertmanager v4 (documentation/ia4ops-webhook-contract.md).
 Une notification = un groupe d'alertes. Déduplication par fingerprint + startsAt.
 """
 

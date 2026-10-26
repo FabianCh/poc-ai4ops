@@ -24,6 +24,7 @@ ia4ops-agent/          # AI diagnosis agent (Python 3.14, uv, FastAPI + LangGrap
                        # image built/pushed to ghcr.io by .github/workflows/ia4ops-agent.yml on main
 ia4ops-agent-chat/     # Experimental independent Chainlit chatbot; see GUIDE-DIRECTION-ARTISTIQUE-IHM.md
 bin/                   # Helper scripts (kubeconfig, flux upgrade, manifest validation, create-keep-secrets, get-secrets)
+documentation/         # Knowledge base (French): plans, progress log, webhook contract, architecture; start at documentation/README.md
 ```
 
 ## Conventions

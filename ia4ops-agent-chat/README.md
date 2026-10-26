@@ -93,8 +93,8 @@ message naturel avant la confirmation ; le diagnostic demeure mock. Le diagnosti
 préconfiguré et ne reflète pas nécessairement les données de la collecte ; l'IHM avertit
 l'opérateur et affiche séparément les observations issues des providers. `DATA_PROVIDER=mock`
 (défaut) produit aussi des observations synthétiques. `DATA_PROVIDER=real` active Prometheus/Loki
-via Grafana (`GRAFANA_*`) sans activer Gemini pour le diagnostic. Les providers Kubernetes réels
-ne sont pas implémentés.
+via Grafana (`GRAFANA_*`) sans activer Gemini pour le diagnostic. Le provider Kubernetes réel
+lit en lecture seule l'API in-cluster (namespace `otel-demo`, ServiceAccount dédié).
 
 ### Alertes Alertmanager
 
@@ -171,4 +171,4 @@ les décisions de cette copie sont distincts et ne modifient pas le comportement
 3. Ajouter la persistance durable de la file et valider le comportement multi-opérateurs.
 4. Créer une image, des manifests et un namespace distincts avant tout déploiement.
 
-Voir le cadrage complet dans [`ia4ops-chatbot-plan.md`](../../ia4ops-chatbot-plan.md).
+Voir le cadrage complet dans [`ia4ops-chatbot-plan.md`](../documentation/ia4ops-chatbot-plan.md).

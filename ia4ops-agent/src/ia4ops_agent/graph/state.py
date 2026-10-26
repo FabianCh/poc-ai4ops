@@ -2,7 +2,7 @@
 État LangGraph du workflow de diagnostic d'incident.
 
 L'état est un TypedDict sérialisable — pas d'objets techniques non-JSON.
-Référence : ia4ops-scenario1-reference.md section 8.
+Référence : documentation/ia4ops-scenario1-reference.md section 8.
 """
 
 from typing import Any, Literal, TypedDict

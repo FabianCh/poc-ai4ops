@@ -4,7 +4,7 @@ Prompt système pour le diagnostic SRE — versionné.
 Le numéro de version est inclus dans chaque AuditEvent pour permettre
 de corréler les diagnostics avec la version du prompt utilisée.
 
-Référence : ia4ops-scenario1-reference.md section 13.
+Référence : documentation/ia4ops-scenario1-reference.md section 13.
 """
 
 PROMPT_VERSION = "1.4.0"

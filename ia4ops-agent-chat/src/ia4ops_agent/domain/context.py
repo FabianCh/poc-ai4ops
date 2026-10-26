@@ -2,7 +2,7 @@
 Modèle du contexte d'incident transmis au LLM.
 
 Le contexte est structuré, compact et borné — jamais des volumes bruts.
-Référence : ia4ops-scenario1-reference.md section 11.
+Référence : documentation/ia4ops-scenario1-reference.md section 11.
 """
 
 from typing import Any, Literal

@@ -4,7 +4,7 @@ Interfaces (Protocols) pour les providers de données d'observabilité.
 Le workflow LangGraph dépend uniquement de ces interfaces — jamais des
 implémentations concrètes (mock ou réelles). Principe : Dependency Inversion.
 
-Référence : ia4ops-scenario1-reference.md section 10.
+Référence : documentation/ia4ops-scenario1-reference.md section 10.
 """
 
 from typing import Any, Protocol, runtime_checkable

@@ -2,7 +2,7 @@
 Modèles de domaine pour le diagnostic d'incident.
 
 Ces modèles représentent la sortie structurée attendue du LLM, validée par Pydantic.
-Référence : ia4ops-scenario1-reference.md section 12.
+Référence : documentation/ia4ops-scenario1-reference.md section 12.
 
 Règle fondamentale du scénario 1 : action_executed est TOUJOURS False.
 """

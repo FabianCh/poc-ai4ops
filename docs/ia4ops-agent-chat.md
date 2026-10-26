@@ -9,7 +9,8 @@ n'est créé.
 - `LLM_PROVIDER=gemini` et `REQUEST_INTERPRETER_PROVIDER=gemini` : diagnostic et interprétation
   en langage naturel via Vertex AI (`gemini-2.5-flash`).
 - `DATA_PROVIDER=real` : métriques Prometheus, logs Loki et traces Jaeger via les proxies Grafana.
-  Le provider Kubernetes demeure non implémenté et signalera la source indisponible.
+  Le provider Kubernetes lit en lecture seule (pods, réplicas, événements `Warning`) le namespace
+  `otel-demo` via le ServiceAccount `ia4ops-agent-chat` ; sans droit, la source est indisponible.
 - Le webhook Alertmanager est routé en parallèle à l'agent stable. Les alertes du namespace
   `otel-demo` restent en attente et n'exécutent aucun diagnostic avant confirmation opérateur.
 - Après confirmation, les investigations manuelles et celles issues d'une alerte affichent un seul
