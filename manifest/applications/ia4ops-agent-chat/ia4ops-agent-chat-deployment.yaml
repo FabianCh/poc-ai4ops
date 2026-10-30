@@ -29,7 +29,7 @@ spec:
       containers:
       - name: ia4ops-agent-chat
         image: ghcr.io/fabianch/poc-ai4ops/ia4ops-agent-chat
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         env:
         - name: LLM_PROVIDER
           value: gemini

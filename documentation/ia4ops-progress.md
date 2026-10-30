@@ -18,6 +18,25 @@ réunion de travail est formalisée dans [`ia4ops-cadrage.md`](ia4ops-cadrage.md
 - Points techniques relevés (section 14 du cadrage) : `HelmRelease` OTel Demo sans détection de
   dérive, aucune alerte sur l'état Flux, aucun accès de l'agent aux objets Flux ni au dépôt, droits
   d'écriture à arbitrer, budget de 5 minutes serré au regard des latences mesurées.
+- **30 octobre — stratégie de développement N0 validée et v1 du chatbot figée** : manifeste
+  `ia4ops-agent-chat` épinglé sur `sha-b94dda4` avec `imagePullPolicy: IfNotPresent`, tag Git
+  `ia4ops-agent-chat-v1` sur `b94dda4`. Le N0 sera développé sur la branche `feature/agent-n0`
+  (même code que le chatbot, sans nouvelle copie), testé en cluster dans une instance distincte
+  `ia4ops-agent-n0`, avec des images `sha-<commit>` uniquement. Spécification en cours (exigences
+  rédigées, design à faire) ; aucune implémentation N0 commencée. L'application du gel recrée le pod
+  du chatbot (même image, état en mémoire perdu).
+- **30 octobre — rollout du 19 octobre confirmé en cluster** (relevé de Maël) : agent stable sur
+  `sha-b94dda4` ; chatbot démarré le 19/10 à 17:20 UTC sur l'empreinte
+  `sha256:746eb355…fa42e`, identique au tag GHCR `sha-b94dda4` ; Roles et RoleBindings
+  `ia4ops-agent-reader` et `ia4ops-agent-chat-reader` présents dans `otel-demo` ; Kustomizations
+  `ia4ops-agent` et `ia4ops-agent-chat` `Ready` sur `20b7c1a`. `latest` pointe désormais sur
+  `sha-20b7c1a` (changements de docstrings uniquement) : le chatbot changerait d'image au prochain
+  redémarrage. Reste non vérifié : un diagnostic réel citant la source `kubernetes`.
+- **30 octobre — scénario challengé** (section 15 du cadrage, **à valider avec Fabian**) : piste A
+  privilégiée (suspension Flux + suppression de `product-catalog`, avec `driftDetection` activée sur
+  la `HelmRelease` ; remédiation par `patch` d'un seul objet) ; piste B en second scénario (commit
+  défectueux, revert par PR). Non bloquant pour les briques indépendantes du scénario (machine à
+  états, timeout/escalade, canal de validation N1, cadre de remédiation).
 - Prochaines actions (Maël) : slides, validation, plan de réalisation ; vérifications d'accès
   Kubernetes et dépôt par l'équipe projet.
 - **Slides de cadrage, version 1 (26 octobre)** : deck Wavestone de 21 slides (vision N0, intégration

@@ -72,9 +72,11 @@ n'est pas implémentée et validée.
    l'image de l'agent stable. Le workflow ne configure pas lui-même la visibilité. Si le package
    doit rester privé, créer un Secret de pull hors Git et ajouter sa référence au Deployment avant
    de le réconcilier.
-3. Le manifeste utilise `latest` pour le premier démarrage et `imagePullPolicy: Always`. Après le
-   premier build, préférer le tag immuable `sha-<7 caractères>` affiché par Actions et mettre à jour
-   `newTag` dans `manifest/applications/ia4ops-agent-chat/kustomization.yaml`.
+3. Depuis le 30 octobre 2026, la v1 est **figée** : `newTag: sha-b94dda4` dans
+   `manifest/applications/ia4ops-agent-chat/kustomization.yaml` et `imagePullPolicy: IfNotPresent`
+   (tag Git `ia4ops-agent-chat-v1`). Un push sur `main` publie toujours `latest`, mais ne change plus
+   l'image déployée. Le développement de l'agent N0 se fait sur la branche `feature/agent-n0` ;
+   ne pas repasser ce manifeste à `latest`.
 4. Attendre la réconciliation Flux (après création des Secrets requis) :
 
    ```bash

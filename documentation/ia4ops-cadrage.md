@@ -3,7 +3,7 @@
 > **Statut** : cadrage issu d'une réunion de travail, à valider (slides de validation à produire).
 > **Source** : synthèse de réunion remise le 26 octobre 2026 (date exacte de la réunion et liste des
 > participants non précisées dans la source).
-> **Dernière mise à jour** : 26 octobre 2026.
+> **Dernière mise à jour** : 30 octobre 2026 (section 15 : pistes de scénario à valider avec Fabian).
 > **Portée** : vision, positionnement RUN, périmètre fonctionnel, garde-fous et scénario de
 > démonstration. Ce document ne décrit pas l'implémentation : voir `ia4ops-progress.md` pour l'état réel.
 
@@ -18,7 +18,7 @@ Chaque élément porte le statut qu'il avait à l'issue de la réunion. Rien n'e
 | **À CONFIRMER** | Hypothèse ou point technique à vérifier avant de s'appuyer dessus |
 | **ÉCARTÉ** / **REMIS EN QUESTION** | Option abandonnée, ou fragilisée avec une alternative proposée |
 
-Les sections 13 et 14 ne viennent pas de la réunion : elles confrontent le cadrage à l'existant du
+Les sections 13 à 15 ne viennent pas de la réunion : elles confrontent le cadrage à l'existant du
 dépôt (analyse du 26 octobre 2026) et signalent les écarts sans les trancher.
 
 ---
@@ -231,7 +231,7 @@ Chaîne fonctionnelle reconstituée :
 | Slides : intégration de l'agent et scénario de démonstration | Maël Mitchel | Support de validation du concept | 🔄 version 1 produite le 26/10 (21 slides, charte Wavestone, hors dépôt) |
 | Partager puis faire valider les slides | Maël Mitchel et équipe | Cadrage validé | ⏳ |
 | Plan de réalisation du cas d'usage | Maël Mitchel | Étapes d'implémentation | ⏳ |
-| Vérifier l'accès de l'agent au cluster Kubernetes | Équipe projet | Validation technique | 🔄 lecture seule implémentée sur `otel-demo` (19/10), rollout non confirmé |
+| Vérifier l'accès de l'agent au cluster Kubernetes | Équipe projet | Validation technique | 🔄 lecture seule sur `otel-demo` déployée (rollout confirmé le 30/10) ; diagnostic réel citant `kubernetes` non vérifié |
 | Vérifier l'accès au dépôt d'infrastructure | Équipe projet | Validation technique | ⏳ aucun accès implémenté |
 | Tester la lecture des données Kubernetes avant la démonstration | Équipe projet | Réduction du risque de démo | ⏳ |
 
@@ -302,6 +302,51 @@ réalisable tel qu'imaginé »).
    au nominal dans ce délai.
 6. **Reproductibilité.** Déclenchement et nettoyage automatisés du scénario, avec cause attendue,
    rejoignent le besoin déjà identifié de scénarios d'incident mesurables.
+
+---
+
+## 15. Pistes pour fiabiliser le scénario (analyse du 30 octobre 2026)
+
+**PROPOSÉ — à valider avec Fabian** (plateforme). Rien n'est décidé ni implémenté ; vérifications en
+cluster à faire avant tout engagement.
+
+### Piste A (privilégiée) : suspension Flux rendue cohérente
+
+- **Prérequis plateforme** : activer `spec.driftDetection` sur la `HelmRelease` `otel-demo`, d'abord
+  en `warn` (repérer les fausses dérives, ajouter des règles `ignore`), puis en `enabled`. Sans cela,
+  un Deployment supprimé n'est jamais recréé et `flux resume` ne répare rien.
+- **Incident** : suspendre la `HelmRelease`, supprimer le Deployment `product-catalog` (le Service
+  reste). Récit : un opérateur suspend Flux pour un correctif manuel, supprime le Deployment pour le
+  recréer, puis est interrompu.
+- **Détection** : alerte existante `OtelDemoServiceHighErrorRate` sur les appelants (frontend,
+  checkout, recommendation) ; l'alerte porte le symptôme, pas la cause.
+- **Diagnostic** : Service sans endpoint + Deployment absent + `HelmRelease.spec.suspend=true` +
+  aucun commit récent. Cause « erreur opérateur » présentée comme probable.
+- **Remédiation après validation N1** : lever la suspension et demander une réconciliation ; seul droit
+  d'écriture : `patch` sur `helmreleases`, `resourceNames: [otel-demo]`.
+- **Vérification par l'agent** : Deployment prêt, endpoints revenus, taux d'erreur sur 1 min ; ne pas
+  attendre la notification `resolved` (5 à 10 min après correction). L'alarme se clôt seule.
+- **Reproductibilité** : cibles Makefile de déclenchement et de nettoyage.
+- **Lectures supplémentaires** : `helmreleases` (`otel-demo`), `kustomizations` (`flux-system`),
+  `services` et `endpointslices` (`otel-demo`).
+
+### Piste B (second scénario possible) : changement défectueux poussé dans Git
+
+- Un commit dégrade les values de la `HelmRelease` (ex. limite mémoire trop basse) → OOMKill →
+  alerte existante `OtelDemoContainerOOMKilled`.
+- L'agent rapproche l'alerte du commit récent, puis propose une PR de revert ; le merge vaut
+  validation N1 et Flux applique. L'agent n'écrit jamais dans le cluster.
+- Freins : token GitHub et protection de `main` obligatoires (Flux étant cluster-admin, un token
+  capable de merger équivaut à un accès admin) ; injection par commit sur le `main` public partagé.
+
+### À vérifier ou trancher
+
+- Accord de Fabian sur `driftDetection` et sur l'extension du RBAC de lecture.
+- Spans du frontend bien en erreur quand `product-catalog` est absent.
+- Fausses dérives de la `HelmRelease` en mode `warn`.
+- Traitement par l'agent d'une notification groupant plusieurs alertes (frontend, checkout…).
+- Périmètre du timeout de 5 min : proposition de le limiter à la phase agent (diagnostic et
+  proposition), hors attente humaine et confirmation par l'alerte.
 
 ---
 

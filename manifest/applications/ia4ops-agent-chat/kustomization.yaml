@@ -3,8 +3,10 @@ kind: Kustomization
 # Pas de `namespace:` global : le Role et le RoleBinding vivent dans otel-demo ; chaque
 # ressource déclare son namespace.
 images:
+# v1 figée (tag Git ia4ops-agent-chat-v1) pendant le développement de l'agent N0 sur la branche
+# feature/agent-n0 : image du 19/10 (empreinte sha256:746eb355…fa42e). Ne pas repasser à latest.
 - name: ghcr.io/fabianch/poc-ai4ops/ia4ops-agent-chat
-  newTag: latest
+  newTag: sha-b94dda4
 labels:
 - includeSelectors: false
   includeTemplates: true
