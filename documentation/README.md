@@ -20,6 +20,7 @@ plateforme (endpoints, accès Cloud Shell, coûts, déploiement du chatbot).
 | [ia4ops-scenario1-reference.md](ia4ops-scenario1-reference.md) | Modèles Pydantic, prompt initial, contrôles post-LLM, principes d'ingénierie, fixtures | Implémentation du domaine et des garde-fous |
 | [ia4ops-architecture-reference.md](ia4ops-architecture-reference.md) | Architecture cible, guardrails, requêtes PromQL/LogQL, trade-offs | Questions d'architecture (document conceptuel) |
 | [ia4ops-platform-context.md](ia4ops-platform-context.md) | Plateforme GCP/k3s/Flux, observabilité, endpoints, état du raccordement | Infrastructure et dépendances |
+| [ia4ops-observability-gaps.md](ia4ops-observability-gaps.md) | Relevé de ce que contient la stack d'observabilité (Prometheus, Loki, Jaeger, événements Kubernetes), ce que les agents consomment, pistes classées pour enrichir le diagnostic | Choisir la prochaine source de données à donner à l'agent |
 | [ia4ops-meeting-notes.md](ia4ops-meeting-notes.md) | Notes des réunions Fabian/Maël (notes générées par IA, à confirmer) | Décisions et responsabilités |
 
 Documents voisins dans le dépôt :

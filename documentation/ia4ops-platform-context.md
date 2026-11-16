@@ -105,6 +105,9 @@ Ces flags sont utilisés pour créer les scénarios de démonstration. Ils sont 
 
 ## 3. Stack d'observabilité
 
+> **Relevé du 16 novembre 2026** : contenu réel de la stack, consommation par les agents et pistes d'enrichissement
+> dans [`ia4ops-observability-gaps.md`](ia4ops-observability-gaps.md).
+
 ### Composants déployés
 
 | Composant | Rôle | État |

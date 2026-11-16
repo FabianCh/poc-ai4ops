@@ -1,5 +1,20 @@
 # IA4Ops Agent — État d'avancement
 
+## Relevé de la stack d'observabilité (16 novembre 2026)
+
+- **Relevé en lecture seule** de Prometheus, Loki, Jaeger et Alertmanager via Grafana : contenu disponible,
+  consommation actuelle des agents et 14 pistes d'enrichissement classées, consignés dans
+  [`ia4ops-observability-gaps.md`](ia4ops-observability-gaps.md). Aucune piste n'est implémentée.
+- **Constats principaux** : les événements Kubernetes (dont Flux) sont déjà dans Loki mais aucun provider « changes »
+  n'alimente la source `changes` du schéma ; aucune métrique Flux (`gotk_*`) n'est collectée, ce qui est un prérequis du
+  scénario N0 proposé ; `kube_pod_labels` est vide ; environ 60 % des logs d'`otel-demo` ont un niveau `unknown` ;
+  Jaeger stocke ses traces en mémoire.
+- **Dépôt** : la branche de travail `claude/sleepy-ride-ub50fm` est alignée sur `main` (`4fc6245`) ; sa suppression
+  sur le dépôt distant a été refusée (HTTP 403) et reste à faire depuis GitHub.
+- **État du cluster observé le 16 novembre** : agents et chatbot prêts ; `productCatalogFailure` et `adHighCpu` activés,
+  alertes de taux d'erreur (`product-catalog`, `frontend`) et de CPU du nœud en cours. L'agent stable tourne toujours en
+  `LLM_PROVIDER=mock`.
+
 ## Cadrage du démonstrateur — agent N0 (26 octobre 2026)
 
 🔄 **Cadrage à valider** (slides à produire puis à faire valider par l'équipe). La synthèse d'une
